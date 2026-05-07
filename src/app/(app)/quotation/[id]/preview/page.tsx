@@ -95,7 +95,7 @@ export default function PreviewPage() {
   if (!quotation) return <div className="text-center py-20 text-gray-400">Quotation not found</div>;
 
   const grandTotal = quotation.rooms.reduce(
-    (s, r) => s + r.items.reduce((rs, i) => rs + i.quantity * Number(i.unitPrice), 0),
+    (s: number, r) => s + r.items.reduce((rs: number, i) => rs + i.quantity * Number(i.unitPrice), 0),
     0
   );
   const discountAmount =
@@ -198,7 +198,7 @@ export default function PreviewPage() {
 
             {summaryRooms.map((room) => {
                 const roomName = room.customName ?? room.roomType?.name ?? "Room";
-                const roomTotal = room.items.reduce((s, i) => s + i.quantity * Number(i.unitPrice), 0);
+                const roomTotal = room.items.reduce((s: number, i) => s + i.quantity * Number(i.unitPrice), 0);
                 return (
                   <section key={room.id} className="rounded-xl border border-slate-200 overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
@@ -305,7 +305,7 @@ export default function PreviewPage() {
 
             {detailedRooms.map((room, roomIndex) => {
               const roomName = room.customName ?? room.roomType?.name ?? "Room";
-              const roomTotal = room.items.reduce((s, i) => s + i.quantity * Number(i.unitPrice), 0);
+              const roomTotal = room.items.reduce((s: number, i) => s + i.quantity * Number(i.unitPrice), 0);
 
               return (
                 <section
