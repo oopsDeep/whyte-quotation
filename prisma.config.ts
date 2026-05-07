@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({
@@ -8,6 +7,6 @@ export default defineConfig({
     seed: "npx ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"]!,
+    url: process.env["DATABASE_URL"] ?? "postgresql://localhost:5432/placeholder",
   },
 });
