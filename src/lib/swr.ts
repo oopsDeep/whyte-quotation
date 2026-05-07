@@ -1,4 +1,12 @@
 import useSWR, { SWRConfiguration } from "swr";
+import type {
+  Category,
+  Product,
+  RoomType,
+  HouseType,
+  Quotation,
+  Company,
+} from "@/types";
 
 /**
  * Global SWR fetcher — simple wrapper around fetch that throws on error.
@@ -34,7 +42,7 @@ export const SWR_ADMIN_OPTIONS: SWRConfiguration = {
  * Used by: Products page, Categories page, Estimator
  */
 export function useCategories(options?: SWRConfiguration) {
-  return useSWR("/api/categories", swrFetcher, {
+  return useSWR<Category[]>("/api/categories", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
@@ -45,7 +53,7 @@ export function useCategories(options?: SWRConfiguration) {
  * Used by: Products page
  */
 export function useAdminProducts(options?: SWRConfiguration) {
-  return useSWR("/api/products?all=true", swrFetcher, {
+  return useSWR<Product[]>("/api/products?all=true", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
@@ -56,7 +64,7 @@ export function useAdminProducts(options?: SWRConfiguration) {
  * Used by: Estimator
  */
 export function useProducts(options?: SWRConfiguration) {
-  return useSWR("/api/products", swrFetcher, {
+  return useSWR<Product[]>("/api/products", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
@@ -67,7 +75,7 @@ export function useProducts(options?: SWRConfiguration) {
  * Used by: Room Types page, House Types page, Estimator
  */
 export function useRoomTypes(options?: SWRConfiguration) {
-  return useSWR("/api/room-types", swrFetcher, {
+  return useSWR<RoomType[]>("/api/room-types", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
@@ -78,7 +86,7 @@ export function useRoomTypes(options?: SWRConfiguration) {
  * Used by: House Types page
  */
 export function useHouseTypes(options?: SWRConfiguration) {
-  return useSWR("/api/house-types", swrFetcher, {
+  return useSWR<HouseType[]>("/api/house-types", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
@@ -89,7 +97,7 @@ export function useHouseTypes(options?: SWRConfiguration) {
  * Used by: Quotations admin page
  */
 export function useQuotations(options?: SWRConfiguration) {
-  return useSWR("/api/quotations", swrFetcher, {
+  return useSWR<Quotation[]>("/api/quotations", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
@@ -100,7 +108,7 @@ export function useQuotations(options?: SWRConfiguration) {
  * Used by: Estimator
  */
 export function useQuotation(id: string | undefined, options?: SWRConfiguration) {
-  return useSWR(id ? `/api/quotations/${id}` : null, swrFetcher, {
+  return useSWR<Quotation>(id ? `/api/quotations/${id}` : null, swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     revalidateOnFocus: false,
     ...options,
@@ -112,7 +120,7 @@ export function useQuotation(id: string | undefined, options?: SWRConfiguration)
  * Used by: Company page, PDF preview
  */
 export function useCompany(options?: SWRConfiguration) {
-  return useSWR("/api/company", swrFetcher, {
+  return useSWR<Company>("/api/company", swrFetcher, {
     ...SWR_ADMIN_OPTIONS,
     ...options,
   });
