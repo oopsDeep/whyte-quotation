@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  gstNumber String?
+  phone     String
+  email     String?
+  address   String
+  logoUrl   String?
+  tagline   String?
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  level     Int
+  parentId  Int?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+}
+
+enum ProductType {
+  switch_board
+  accessory
+  retrofit
+  curtain
+  smart_lock
+  vdp
+  other
+}
+
+model Product {
+  id             Int             @id @default(autoincrement())
+  name           String
+  code           String?
+  description    String?
+  type           ProductType
+  categoryId     Int?
+  category       Category?       @relation(fields: [categoryId], references: [id])
+  price          Decimal         @db.Decimal(10, 2)
+  unit           String          @default("pcs")
+  imageUrl       String?
+  notes          String?
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  quotationItems QuotationItem[]
+}
+
+model HouseType {
+  id           Int                     @id @default(autoincrement())
+  name         String
+  description  String?
+  isActive     Boolean                 @default(true)
+  sortOrder    Int                     @default(0)
+  roomTemplate HouseTypeRoomTemplate[]
+  quotations   Quotation[]
+}
+
+model RoomType {
+  id             Int                     @id @default(autoincrement())
+  name           String
+  icon           String?
+  isActive       Boolean                 @default(true)
+  sortOrder      Int                     @default(0)
+  roomTemplate   HouseTypeRoomTemplate[]
+  quotationRooms QuotationRoom[]
+}
+
+model HouseTypeRoomTemplate {
+  id           Int       @id @default(autoincrement())
+  houseTypeId  Int
+  houseType    HouseType @relation(fields: [houseTypeId], references: [id])
+  roomTypeId   Int
+  roomType     RoomType  @relation(fields: [roomTypeId], references: [id])
+  defaultCount Int       @default(1)
+  sortOrder    Int       @default(0)
+}
+
+enum QuotationStatus {
+  draft
+  sent
+  approved
+  rejected
+}
+
+enum DiscountType {
+  percentage
+  fixed
+  none
+}
+
+model Quotation {
+  id              String          @id @default(cuid())
+  quotationNumber String          @unique
+  clientName      String
+  clientGstNumber String?
+  clientPhone     String?
+  clientEmail     String?
+  clientAddress   String?
+  houseTypeId     Int?
+  houseType       HouseType?      @relation(fields: [houseTypeId], references: [id])
+  status          QuotationStatus @default(draft)
+  notes           String?
+  discountType    DiscountType?
+  discountValue   Decimal?        @db.Decimal(10, 2)
+  terms           String?
+  validUntil      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  createdBy       String?
+  rooms           QuotationRoom[]
+}
+
+model QuotationRoom {
+  id          Int             @id @default(autoincrement())
+  quotationId String
+  quotation   Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  roomTypeId  Int?
+  roomType    RoomType?       @relation(fields: [roomTypeId], references: [id])
+  customName  String?
+  subArea     String?
+  notes       String?
+  sortOrder   Int             @default(0)
+  items       QuotationItem[]
+}
+
+model QuotationItem {
+  id              Int           @id @default(autoincrement())
+  quotationRoomId Int
+  room            QuotationRoom @relation(fields: [quotationRoomId], references: [id], onDelete: Cascade)
+  productId       Int
+  product         Product       @relation(fields: [productId], references: [id])
+  sbNumber        String?
+  quantity        Int           @default(1)
+  unitPrice       Decimal       @db.Decimal(10, 2)
+  notes           String?
+  sortOrder       Int           @default(0)
+}
+
+enum AdminRole {
+  super_admin
+  admin
+  sales
+}
+
+model AdminUser {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(sales)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+}
