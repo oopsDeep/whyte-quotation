@@ -5,6 +5,9 @@ import { formatDate } from "@/lib/utils";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { QuotationStatus } from "@/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function HomePage() {
   let quotations: any[] = [];
 
