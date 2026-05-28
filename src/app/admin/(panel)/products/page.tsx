@@ -37,12 +37,16 @@ export default function ProductsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await fetch(`/api/products/${deleteTarget.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/products/${deleteTarget.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Failed to delete product");
+      }
       toast.success("Product deleted");
       setDeleteTarget(null);
-      mutateProducts();
-    } catch {
-      toast.error("Failed to delete");
+      await mutateProducts();
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to delete");
     } finally {
       setDeleting(false);
     }

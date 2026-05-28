@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
 import { Category } from "@/types";
-import { Plus, Trash2, ChevronRight, ChevronDown, Package } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronRight, ChevronDown, Package } from "lucide-react";
 import toast from "react-hot-toast";
+import Modal from "@/components/shared/Modal";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import { useCategories } from "@/lib/swr";
@@ -65,10 +66,11 @@ interface CategoryNodeProps {
   addingTo: { level: number; parentId: number | null } | null;
   onSetAddingTo: (val: { level: number; parentId: number | null } | null) => void;
   onAdd: (name: string, level: number, parentId: number | null) => Promise<void>;
+  onEdit: (cat: Category) => void;
   onDelete: (cat: Category) => void;
 }
 
-function CategoryNode({ category, depth, addingTo, onSetAddingTo, onAdd, onDelete }: CategoryNodeProps) {
+function CategoryNode({ category, depth, addingTo, onSetAddingTo, onAdd, onEdit, onDelete }: CategoryNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = (category.children?.length ?? 0) > 0;
   const isLeaf = !hasChildren;
@@ -113,6 +115,9 @@ function CategoryNode({ category, depth, addingTo, onSetAddingTo, onAdd, onDelet
               <Plus size={12} /> <span className="hidden sm:inline">Add {LEVEL_LABELS[nextLevel] ?? "Sub"}</span><span className="sm:hidden">+</span>
             </button>
           )}
+          <button onClick={() => onEdit(category)} className="p-1.5 text-gray-400 hover:text-whyte-blue hover:bg-blue-50 rounded-lg transition">
+            <Pencil size={14} />
+          </button>
           <button onClick={() => onDelete(category)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
             <Trash2 size={14} />
           </button>
@@ -141,6 +146,7 @@ function CategoryNode({ category, depth, addingTo, onSetAddingTo, onAdd, onDelet
               addingTo={addingTo}
               onSetAddingTo={onSetAddingTo}
               onAdd={onAdd}
+              onEdit={onEdit}
               onDelete={onDelete}
             />
           ))}
@@ -153,6 +159,10 @@ function CategoryNode({ category, depth, addingTo, onSetAddingTo, onAdd, onDelet
 export default function CategoriesPage() {
   const { data: categories = [], isLoading: loading, mutate } = useCategories();
   const [addingTo, setAddingTo] = useState<{ level: number; parentId: number | null } | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editName, setEditName] = useState("");
+  const editInputRef = useRef<HTMLInputElement | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -172,6 +182,59 @@ export default function CategoriesPage() {
       mutate();
     } catch (err: any) {
       toast.error(err.message ?? "Failed to add category");
+    }
+  };
+
+  const handleEditOpen = (category: Category) => {
+    setEditingCategory(category);
+    setEditName(category.name);
+  };
+
+  // Focus the input once when the edit modal opens. Using a ref avoids
+  // relying on the `autoFocus` attribute which could interact poorly with
+  // other focus management and cause the caret to be lost on re-renders.
+  useEffect(() => {
+    if (editingCategory) {
+      // Defer to next tick so the input is mounted
+      setTimeout(() => {
+        try {
+          editInputRef.current?.focus();
+          const len = editInputRef.current?.value?.length ?? 0;
+          editInputRef.current?.setSelectionRange(len, len);
+        } catch {}
+      }, 0);
+    }
+  }, [editingCategory]);
+
+  const handleEditClose = useCallback(() => {
+    setEditingCategory(null);
+    setEditName("");
+    setSavingEdit(false);
+  }, []);
+
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingCategory || !editName.trim()) return;
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/categories/${editingCategory.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Failed to update category");
+      }
+
+      toast.success("Category updated");
+      handleEditClose();
+      await mutate();
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to update category");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -236,10 +299,50 @@ export default function CategoriesPage() {
             addingTo={addingTo}
             onSetAddingTo={setAddingTo}
             onAdd={handleAdd}
+            onEdit={handleEditOpen}
             onDelete={setDeleteTarget}
           />
         ))}
       </div>
+
+      <Modal
+        isOpen={!!editingCategory}
+        onClose={handleEditClose}
+        title="Edit Category"
+        size="md"
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {editingCategory ? `${LEVEL_LABELS[editingCategory.level] ?? "Category"} name` : "Category name"}
+            </label>
+            <input
+              ref={editInputRef}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+              placeholder="Enter category name"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleEditClose}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingEdit || !editName.trim()}
+              className="px-4 py-2 rounded-xl bg-whyte-blue text-white text-sm font-medium hover:bg-whyte-light transition-colors disabled:opacity-60"
+            >
+              {savingEdit ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <ConfirmDialog
         isOpen={!!deleteTarget}

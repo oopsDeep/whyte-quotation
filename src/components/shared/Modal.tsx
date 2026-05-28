@@ -18,7 +18,11 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
     if (!isOpen) return;
 
     const previousActive = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
+    // If the dialog contains an element with autofocus, prefer that element.
+    // Otherwise move focus to the close button so keyboard users can easily
+    // find the dialog controls.
+    const hasAutoFocus = !!dialogRef.current?.querySelector('[autofocus]');
+    if (!hasAutoFocus) closeButtonRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -77,6 +81,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100 shrink-0">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900">{title}</h2>
           <button
+            type="button"
             ref={closeButtonRef}
             onClick={onClose}
             className="p-2 rounded-xl hover:bg-gray-100 transition-colors"

@@ -44,12 +44,38 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    // Ensure price is stored as a number
+    const price = Number(body.price);
+    if (!Number.isFinite(price) || price < 0) {
+      return NextResponse.json({ error: "Price must be a valid non-negative number" }, { status: 400 });
+    }
+
+    let categoryId: number | null = null;
+    if (body.categoryId !== undefined && body.categoryId !== null && body.categoryId !== "") {
+      categoryId = Number(body.categoryId);
+      if (!Number.isFinite(categoryId)) {
+        return NextResponse.json({ error: "Invalid category id" }, { status: 400 });
+      }
+
+      const category = await prisma.category.findUnique({
+        where: { id: categoryId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!category) {
+        return NextResponse.json({ error: "Selected category does not exist" }, { status: 400 });
+      }
+
+      if (!category.isActive) {
+        return NextResponse.json({ error: "Selected category is inactive" }, { status: 400 });
+      }
+    }
+
+    // Ensure price and category are validated before create
     const product = await prisma.product.create({
       data: {
         ...body,
-        price: Number(body.price),
-        categoryId: body.categoryId ? Number(body.categoryId) : null,
+        price,
+        categoryId,
       },
     });
     return NextResponse.json(product, { status: 201 });

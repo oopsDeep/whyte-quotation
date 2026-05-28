@@ -12,9 +12,15 @@ export async function PATCH(req: Request, context: RouteContext) {
 
   try {
     const body = await req.json();
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+
+    if (!name) {
+      return NextResponse.json({ error: "Category name is required" }, { status: 400 });
+    }
+
     const category = await prisma.category.update({
       where: { id: Number(id) },
-      data: body,
+      data: { name },
     });
     return NextResponse.json(category);
   } catch {
