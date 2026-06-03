@@ -3,10 +3,13 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/products
  * Query param: ?all=true  → returns all products (admin)
  * Default       → returns only active products (estimator)
+ * Now includes variants[] for each product.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -29,6 +32,10 @@ export async function GET(req: Request) {
             },
           },
         },
+        variants: {
+          where: showAll ? undefined : { isActive: true },
+          orderBy: { sortOrder: "asc" },
+        },
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
@@ -38,20 +45,37 @@ export async function GET(req: Request) {
   }
 }
 
+/**
+ * POST /api/products
+ * Body: { name, code, type, categoryId, unit, imageUrl, moduleSize, notes, variants[] }
+ * variants: [{ automationTier, surfaceFinish, price }]
+ */
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const body = await req.json();
-    const price = Number(body.price);
-    if (!Number.isFinite(price) || price < 0) {
-      return NextResponse.json({ error: "Price must be a valid non-negative number" }, { status: 400 });
+    const { variants: variantsInput, ...productData } = body;
+
+    // Validate variants — must have at least one
+    const variants = Array.isArray(variantsInput) ? variantsInput : [];
+    if (variants.length === 0) {
+      return NextResponse.json({ error: "At least one pricing variant is required" }, { status: 400 });
     }
 
+    // Validate all variant prices
+    for (const v of variants) {
+      const price = Number(v.price);
+      if (!Number.isFinite(price) || price < 0) {
+        return NextResponse.json({ error: "All variant prices must be valid non-negative numbers" }, { status: 400 });
+      }
+    }
+
+    // Validate categoryId
     let categoryId: number | null = null;
-    if (body.categoryId !== undefined && body.categoryId !== null && body.categoryId !== "") {
-      categoryId = Number(body.categoryId);
+    if (productData.categoryId !== undefined && productData.categoryId !== null && productData.categoryId !== "") {
+      categoryId = Number(productData.categoryId);
       if (!Number.isFinite(categoryId)) {
         return NextResponse.json({ error: "Invalid category id" }, { status: 400 });
       }
@@ -70,14 +94,45 @@ export async function POST(req: Request) {
       }
     }
 
-    // Ensure price and category are validated before create
-    const product = await prisma.product.create({
-      data: {
-        ...body,
-        price,
-        categoryId,
-      },
+    // Create product + variants in a transaction
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          name: productData.name,
+          code: productData.code || null,
+          description: productData.description || null,
+          type: productData.type,
+          categoryId,
+          unit: productData.unit || "pcs",
+          imageUrl: productData.imageUrl || null,
+          moduleSize: productData.moduleSize || null,
+          notes: productData.notes || null,
+          sortOrder: productData.sortOrder ?? 0,
+          isActive: productData.isActive ?? true,
+        },
+      });
+
+      // Create variant rows
+      for (let i = 0; i < variants.length; i++) {
+        const v = variants[i];
+        await tx.productVariant.create({
+          data: {
+            productId: created.id,
+            automationTier: v.automationTier || null,
+            surfaceFinish: v.surfaceFinish || null,
+            price: Number(v.price),
+            sortOrder: i,
+            isActive: true,
+          },
+        });
+      }
+
+      return tx.product.findUnique({
+        where: { id: created.id },
+        include: { variants: { orderBy: { sortOrder: "asc" } } },
+      });
     });
+
     return NextResponse.json(product, { status: 201 });
   } catch (e) {
     console.error("POST /api/products error:", e);

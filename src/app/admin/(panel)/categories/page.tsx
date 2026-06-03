@@ -1,201 +1,99 @@
 "use client";
-import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
-import { Category } from "@/types";
-import { Plus, Trash2, Pencil, ChevronRight, ChevronDown, Package } from "lucide-react";
+import { useState, useRef, useEffect, useCallback, type FormEvent, useMemo } from "react";
+import { Category, VariantOption } from "@/types";
+import { 
+  Plus, 
+  Trash2, 
+  Pencil, 
+  Package, 
+  Layers, 
+  RefreshCw,
+  FolderOpen,
+  Settings,
+  X
+} from "lucide-react";
 import toast from "react-hot-toast";
 import Modal from "@/components/shared/Modal";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
-import { useCategories } from "@/lib/swr";
-
-const MAX_DEPTH = 3;
-
-const LEVEL_LABELS: Record<number, string> = {
-  1: "Series",
-  2: "Category",
-  3: "Subcategory",
-};
-
-const LEVEL_COLORS: Record<number, { bg: string; text: string; addBg: string; addText: string }> = {
-  1: { bg: "bg-gray-50/50", text: "text-gray-800", addBg: "bg-blue-50", addText: "text-blue-600" },
-  2: { bg: "", text: "text-gray-700", addBg: "bg-emerald-50", addText: "text-emerald-600" },
-  3: { bg: "", text: "text-gray-600", addBg: "bg-violet-50", addText: "text-violet-600" },
-};
-
-interface InlineFormProps {
-  level: number;
-  onSave: (name: string) => Promise<void>;
-  onCancel: () => void;
-}
-
-function InlineForm({ level, onSave, onCancel }: InlineFormProps) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        setSaving(true);
-        await onSave(name.trim());
-        setSaving(false);
-      }}
-      className="flex gap-2 items-center my-1"
-    >
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-        placeholder={`${LEVEL_LABELS[level] ?? "Category"} name`}
-        className="flex-1 px-3 py-1.5 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-      />
-      <button type="submit" disabled={saving} className="px-3 py-1.5 bg-whyte-blue text-white rounded-lg text-sm font-medium hover:bg-whyte-light transition disabled:opacity-60">
-        {saving ? "..." : "Save"}
-      </button>
-      <button type="button" onClick={onCancel} className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
-        Cancel
-      </button>
-    </form>
-  );
-}
-
-interface CategoryNodeProps {
-  category: Category;
-  depth: number;
-  addingTo: { level: number; parentId: number | null } | null;
-  onSetAddingTo: (val: { level: number; parentId: number | null } | null) => void;
-  onAdd: (name: string, level: number, parentId: number | null) => Promise<void>;
-  onEdit: (cat: Category) => void;
-  onDelete: (cat: Category) => void;
-}
-
-function CategoryNode({ category, depth, addingTo, onSetAddingTo, onAdd, onEdit, onDelete }: CategoryNodeProps) {
-  const [expanded, setExpanded] = useState(true);
-  const hasChildren = (category.children?.length ?? 0) > 0;
-  const isLeaf = !hasChildren;
-  const canAddChild = depth < MAX_DEPTH;
-  const colors = LEVEL_COLORS[depth] ?? LEVEL_COLORS[3];
-  const paddingLeft = depth === 1 ? "pl-4" : depth === 2 ? "pl-10" : "pl-16";
-  const nextLevel = depth + 1;
-
-  return (
-    <div>
-      {/* Category Row */}
-      <div className={`flex items-center justify-between ${paddingLeft} pr-4 py-2.5 ${colors.bg}`}>
-        <div className="flex items-center gap-2 min-w-0">
-          {hasChildren ? (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
-          ) : (
-            <span className="w-5 flex items-center justify-center">
-              <span className="w-1.5 h-1.5 bg-gray-300 rounded-full inline-block" />
-            </span>
-          )}
-          <span className={`${depth === 1 ? "font-semibold" : "font-medium"} ${colors.text} text-sm truncate`}>
-            {category.name}
-          </span>
-          <span className="text-[10px] text-gray-400 font-normal shrink-0">{LEVEL_LABELS[depth]}</span>
-          {isLeaf && (
-            <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium shrink-0 hidden sm:inline-flex items-center gap-1">
-              <Package size={10} /> Leaf
-            </span>
-          )}
-        </div>
-        <div className="flex gap-1 shrink-0">
-          {canAddChild && (
-            <button
-              onClick={() => onSetAddingTo({ level: nextLevel, parentId: category.id })}
-              className={`text-xs px-2 py-1 ${colors.addBg} ${colors.addText} rounded-lg hover:opacity-80 transition flex items-center gap-1`}
-            >
-              <Plus size={12} /> <span className="hidden sm:inline">Add {LEVEL_LABELS[nextLevel] ?? "Sub"}</span><span className="sm:hidden">+</span>
-            </button>
-          )}
-          <button onClick={() => onEdit(category)} className="p-1.5 text-gray-400 hover:text-whyte-blue hover:bg-blue-50 rounded-lg transition">
-            <Pencil size={14} />
-          </button>
-          <button onClick={() => onDelete(category)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Inline add form for child */}
-      {addingTo?.level === nextLevel && addingTo.parentId === category.id && (
-        <div className={`${depth === 1 ? "px-8" : depth === 2 ? "px-14" : "px-20"} py-2 bg-blue-50/30`}>
-          <InlineForm
-            level={nextLevel}
-            onSave={(name) => onAdd(name, nextLevel, category.id)}
-            onCancel={() => onSetAddingTo(null)}
-          />
-        </div>
-      )}
-
-      {/* Children (recursive) */}
-      {expanded && hasChildren && (
-        <div>
-          {category.children!.map((child) => (
-            <CategoryNode
-              key={child.id}
-              category={child}
-              depth={depth + 1}
-              addingTo={addingTo}
-              onSetAddingTo={onSetAddingTo}
-              onAdd={onAdd}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { useCategories, useAdminProducts } from "@/lib/swr";
 
 export default function CategoriesPage() {
-  const { data: categories = [], isLoading: loading, mutate } = useCategories();
-  const [addingTo, setAddingTo] = useState<{ level: number; parentId: number | null } | null>(null);
+  const { data: categories = [], isLoading: loadingCategories, mutate: mutateCategories } = useCategories();
+  const { data: products = [], mutate: mutateProducts } = useAdminProducts();
+  const loading = loadingCategories;
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addTiers, setAddTiers] = useState<VariantOption[]>([]);
+  const [addFinishes, setAddFinishes] = useState<VariantOption[]>([]);
+  const [savingAdd, setSavingAdd] = useState(false);
+
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editName, setEditName] = useState("");
+  const [editTiers, setEditTiers] = useState<VariantOption[]>([]);
+  const [editFinishes, setEditFinishes] = useState<VariantOption[]>([]);
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const handleAdd = async (name: string, level: number, parentId: number | null) => {
+  const refreshAll = () => {
+    mutateCategories();
+    mutateProducts();
+  };
+
+  // --- Add ---
+  const handleAddSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!addName.trim()) return;
+
+    // Validate that all variant options have both value and label
+    const validTiers = addTiers.filter(t => t.value.trim() && t.label.trim());
+    const validFinishes = addFinishes.filter(f => f.value.trim() && f.label.trim());
+
+    setSavingAdd(true);
     try {
       const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, level, parentId, sortOrder: 0 }),
+        body: JSON.stringify({
+          name: addName.trim(),
+          level: 1,
+          parentId: null,
+          sortOrder: 0,
+          variantTiers: validTiers,
+          variantFinishes: validFinishes,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Failed to add");
+        throw new Error(data.error ?? "Failed to add category");
       }
-      toast.success(`${LEVEL_LABELS[level] ?? "Category"} added`);
-      setAddingTo(null);
-      mutate();
+      toast.success("Category added successfully");
+      setShowAddModal(false);
+      setAddName("");
+      setAddTiers([]);
+      setAddFinishes([]);
+      refreshAll();
     } catch (err: any) {
       toast.error(err.message ?? "Failed to add category");
+    } finally {
+      setSavingAdd(false);
     }
   };
 
+  // --- Edit ---
   const handleEditOpen = (category: Category) => {
     setEditingCategory(category);
     setEditName(category.name);
+    setEditTiers((category.variantTiers as VariantOption[]) ?? []);
+    setEditFinishes((category.variantFinishes as VariantOption[]) ?? []);
   };
 
-  // Focus the input once when the edit modal opens. Using a ref avoids
-  // relying on the `autoFocus` attribute which could interact poorly with
-  // other focus management and cause the caret to be lost on re-renders.
   useEffect(() => {
     if (editingCategory) {
-      // Defer to next tick so the input is mounted
       setTimeout(() => {
         try {
           editInputRef.current?.focus();
@@ -209,6 +107,8 @@ export default function CategoriesPage() {
   const handleEditClose = useCallback(() => {
     setEditingCategory(null);
     setEditName("");
+    setEditTiers([]);
+    setEditFinishes([]);
     setSavingEdit(false);
   }, []);
 
@@ -216,12 +116,19 @@ export default function CategoriesPage() {
     event.preventDefault();
     if (!editingCategory || !editName.trim()) return;
 
+    const validTiers = editTiers.filter(t => t.value.trim() && t.label.trim());
+    const validFinishes = editFinishes.filter(f => f.value.trim() && f.label.trim());
+
     setSavingEdit(true);
     try {
       const res = await fetch(`/api/categories/${editingCategory.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName.trim() }),
+        body: JSON.stringify({
+          name: editName.trim(),
+          variantTiers: validTiers,
+          variantFinishes: validFinishes,
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -230,7 +137,7 @@ export default function CategoriesPage() {
 
       toast.success("Category updated");
       handleEditClose();
-      await mutate();
+      refreshAll();
     } catch (err: any) {
       toast.error(err.message ?? "Failed to update category");
     } finally {
@@ -238,6 +145,7 @@ export default function CategoriesPage() {
     }
   };
 
+  // --- Delete ---
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -247,7 +155,7 @@ export default function CategoriesPage() {
       if (!res.ok) throw new Error(data.error);
       toast.success("Category deleted");
       setDeleteTarget(null);
-      mutate();
+      refreshAll();
     } catch (err: any) {
       toast.error(err.message ?? "Failed to delete");
     } finally {
@@ -255,88 +163,365 @@ export default function CategoriesPage() {
     }
   };
 
+  // Mapped products count map for speed
+  const productCountMap = useMemo(() => {
+    const map: Record<number, number> = {};
+    products.forEach((p) => {
+      if (p.categoryId) {
+        map[p.categoryId] = (map[p.categoryId] ?? 0) + 1;
+      }
+    });
+    return map;
+  }, [products]);
+
   if (loading) return <LoadingSpinner />;
 
-  // Count total nodes for info display
-  const countNodes = (cats: Category[]): number =>
-    cats.reduce((sum, c) => sum + 1 + countNodes(c.children ?? []), 0);
-  const totalNodes = countNodes(categories);
+  const totalCategories = categories.length;
+  const categorizedProducts = products.filter((p) => p.categoryId !== null).length;
+
+  const inputClass = "w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 bg-white transition";
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="max-w-full space-y-6">
+      
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Categories</h1>
-          <p className="text-gray-500 text-xs sm:text-sm mt-1">
-            Hierarchy: Series → Category → Subcategory (max {MAX_DEPTH} levels) · {totalNodes} total
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Categories &amp; Series</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Manage your product lines, series taxonomy, and configure variant dimensions (tiers &amp; finishes) per category.
           </p>
         </div>
         <button
-          onClick={() => setAddingTo({ level: 1, parentId: null })}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-whyte-blue text-white rounded-xl font-medium text-sm hover:bg-whyte-light transition-colors w-full sm:w-auto"
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center justify-center gap-2 px-5 py-3 bg-whyte-blue text-white rounded-xl font-semibold text-sm hover:bg-whyte-light transition-all shadow-sm hover:shadow-md shrink-0 w-full sm:w-auto"
         >
           <Plus size={16} />
-          Add Series
+          Add Series / Category
         </button>
       </div>
 
-      {/* Add Level 1 inline */}
-      {addingTo?.level === 1 && !addingTo.parentId && (
-        <div className="bg-blue-50 p-3 rounded-xl mb-4">
-          <InlineForm level={1} onSave={(name) => handleAdd(name, 1, null)} onCancel={() => setAddingTo(null)} />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        
+        {/* Card 1: Total Categories */}
+        <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="p-3 bg-blue-50 text-whyte-blue rounded-xl">
+            <Layers size={22} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Categories / Series</p>
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalCategories}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Top-level product catalog anchors</p>
+          </div>
         </div>
-      )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50 overflow-hidden">
-        {categories.length === 0 && (
-          <div className="p-8 text-center text-gray-400 text-sm">No categories yet. Add a Series to get started.</div>
-        )}
-        {categories.map((l1: Category) => (
-          <CategoryNode
-            key={l1.id}
-            category={l1}
-            depth={1}
-            addingTo={addingTo}
-            onSetAddingTo={setAddingTo}
-            onAdd={handleAdd}
-            onEdit={handleEditOpen}
-            onDelete={setDeleteTarget}
-          />
-        ))}
+        {/* Card 2: Categorized Products */}
+        <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+            <Package size={22} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Categorized Products</p>
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">{categorizedProducts}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Assigned to parent catalog lines</p>
+          </div>
+        </div>
+
       </div>
 
+      {/* Categories List Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50/30">
+          <h2 className="font-semibold text-slate-800 text-sm">All Series &amp; Categories</h2>
+          <button 
+            onClick={refreshAll} 
+            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all bg-white shadow-sm"
+            title="Refresh category list"
+          >
+            <RefreshCw size={14} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* Desktop View Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <th className="text-left px-5 py-4">Series / Category Name</th>
+                <th className="text-left px-5 py-4 w-52">Variant Dimensions</th>
+                <th className="text-left px-5 py-4 w-48">Mapped Products</th>
+                <th className="text-right px-5 py-4 w-28">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {categories.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-5 py-12 text-center text-slate-400 text-sm">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <FolderOpen size={36} className="opacity-20 text-slate-900" />
+                      <p className="font-semibold text-slate-500">No categories found</p>
+                      <p className="text-xs text-slate-400">Click &quot;Add Series / Category&quot; above to get started.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {categories.map((cat: Category) => {
+                const count = productCountMap[cat.id] ?? 0;
+                const tiers = (cat.variantTiers as VariantOption[]) ?? [];
+                const finishes = (cat.variantFinishes as VariantOption[]) ?? [];
+                const hasDimensions = tiers.length > 0 || finishes.length > 0;
+
+                return (
+                  <tr key={cat.id} className="hover:bg-slate-50/40 transition-colors">
+                    <td className="px-5 py-4 font-semibold text-slate-800 text-sm">
+                      {cat.name}
+                    </td>
+                    <td className="px-5 py-4">
+                      {hasDimensions ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {tiers.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md text-[10px] font-semibold">
+                              <Settings size={9} /> {tiers.length} Tier{tiers.length > 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {finishes.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-md text-[10px] font-semibold">
+                              <Settings size={9} /> {finishes.length} Finish{finishes.length > 1 ? "es" : ""}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-md text-[10px] font-semibold">
+                          Single Price
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      {count > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[11px] font-semibold">
+                          <Package size={11} /> {count} Product{count > 1 ? "s" : ""}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-full text-[11px] font-semibold">
+                          <Package size={11} /> 0 Products
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => handleEditOpen(cat)}
+                          className="p-2 text-slate-400 hover:text-whyte-blue hover:bg-blue-50 rounded-xl transition-all"
+                          title="Edit category & variant config"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(cat)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                          title="Delete category"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="md:hidden divide-y divide-slate-100 bg-white">
+          {categories.length === 0 && (
+            <div className="p-8 text-center text-slate-400 text-sm">
+              <FolderOpen size={32} className="mx-auto opacity-20 mb-2" />
+              <p className="font-semibold">No categories seeded yet</p>
+            </div>
+          )}
+          {categories.map((cat: Category) => {
+            const count = productCountMap[cat.id] ?? 0;
+            const tiers = (cat.variantTiers as VariantOption[]) ?? [];
+            const finishes = (cat.variantFinishes as VariantOption[]) ?? [];
+            const hasDimensions = tiers.length > 0 || finishes.length > 0;
+
+            return (
+              <div key={cat.id} className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-800 text-sm">{cat.name}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleEditOpen(cat)}
+                      className="p-2 text-slate-400 hover:text-whyte-blue hover:bg-blue-50 rounded-xl transition-all"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(cat)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 flex-wrap">
+                  {hasDimensions ? (
+                    <>
+                      {tiers.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[9px] font-bold">
+                          {tiers.length} Tier{tiers.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {finishes.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[9px] font-bold">
+                          {finishes.length} Finish{finishes.length > 1 ? "es" : ""}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-slate-400 border border-slate-200 rounded text-[9px] font-bold">
+                      Single Price
+                    </span>
+                  )}
+                  {count > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-semibold">
+                      <Package size={10} /> {count} Product{count > 1 ? "s" : ""}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-full text-[10px] font-semibold">
+                      <Package size={10} /> 0 Products
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+      </div>
+
+      {/* Add Modal */}
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => { setShowAddModal(false); setAddName(""); setAddTiers([]); setAddFinishes([]); }}
+        title="Add Product Category / Series"
+        size="lg"
+      >
+        <form onSubmit={handleAddSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+              Category Name *
+            </label>
+            <input
+              required
+              autoFocus
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Tactus VLuxe, Retro Series"
+            />
+          </div>
+
+          {/* Variant Tiers Config */}
+          <VariantDimensionEditor
+            label="Automation Tiers"
+            description="Define available technology tiers for this series (e.g., WiFi, Zigbee). Leave empty for single-price products."
+            items={addTiers}
+            onChange={setAddTiers}
+            valuePlaceholder="e.g. wifi"
+            labelPlaceholder="e.g. WiFi Smart"
+            inputClass={inputClass}
+          />
+
+          {/* Variant Finishes Config */}
+          <VariantDimensionEditor
+            label="Surface Finishes"
+            description="Define available surface finishes for this series (e.g., Glass, Acrylic). Leave empty for no finish options."
+            items={addFinishes}
+            onChange={setAddFinishes}
+            valuePlaceholder="e.g. glass"
+            labelPlaceholder="e.g. Glass Panel"
+            inputClass={inputClass}
+          />
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => { setShowAddModal(false); setAddName(""); setAddTiers([]); setAddFinishes([]); }}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all bg-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingAdd || !addName.trim()}
+              className="px-4 py-2.5 rounded-xl bg-whyte-blue text-white text-sm font-semibold hover:bg-whyte-light transition-all disabled:opacity-60 shadow-sm"
+            >
+              {savingAdd ? "Saving..." : "Add Category"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
       <Modal
         isOpen={!!editingCategory}
         onClose={handleEditClose}
-        title="Edit Category"
-        size="md"
+        title="Edit Category & Variant Config"
+        size="lg"
       >
-        <form onSubmit={handleEditSubmit} className="space-y-4">
+        <form onSubmit={handleEditSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {editingCategory ? `${LEVEL_LABELS[editingCategory.level] ?? "Category"} name` : "Category name"}
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+              Category Name *
             </label>
             <input
               ref={editInputRef}
+              required
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+              className={inputClass}
               placeholder="Enter category name"
             />
           </div>
+
+          {/* Variant Tiers Config */}
+          <VariantDimensionEditor
+            label="Automation Tiers"
+            description="Technology tiers available for products in this series. Changes apply to new products only."
+            items={editTiers}
+            onChange={setEditTiers}
+            valuePlaceholder="e.g. wifi"
+            labelPlaceholder="e.g. WiFi Smart"
+            inputClass={inputClass}
+          />
+
+          {/* Variant Finishes Config */}
+          <VariantDimensionEditor
+            label="Surface Finishes"
+            description="Surface finish options for products in this series. Changes apply to new products only."
+            items={editFinishes}
+            onChange={setEditFinishes}
+            valuePlaceholder="e.g. glass"
+            labelPlaceholder="e.g. Glass Panel"
+            inputClass={inputClass}
+          />
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={handleEditClose}
-              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all bg-white"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={savingEdit || !editName.trim()}
-              className="px-4 py-2 rounded-xl bg-whyte-blue text-white text-sm font-medium hover:bg-whyte-light transition-colors disabled:opacity-60"
+              className="px-4 py-2.5 rounded-xl bg-whyte-blue text-white text-sm font-semibold hover:bg-whyte-light transition-all disabled:opacity-60 shadow-sm"
             >
               {savingEdit ? "Saving..." : "Save Changes"}
             </button>
@@ -344,17 +529,118 @@ export default function CategoriesPage() {
         </form>
       </Modal>
 
+      {/* Delete confirmation */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        message={`Delete "${deleteTarget?.name}"? ${
-          (deleteTarget?.children?.length ?? 0) > 0
-            ? "This will also affect all subcategories underneath."
-            : "This cannot be undone."
-        }`}
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? All associated product mappings will be cleared. This action is irreversible.`}
         isLoading={deleting}
       />
+
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Reusable component for editing a list of variant options
+// ──────────────────────────────────────────────────────────────
+function VariantDimensionEditor({
+  label,
+  description,
+  items,
+  onChange,
+  valuePlaceholder,
+  labelPlaceholder,
+  inputClass,
+}: {
+  label: string;
+  description: string;
+  items: VariantOption[];
+  onChange: (items: VariantOption[]) => void;
+  valuePlaceholder: string;
+  labelPlaceholder: string;
+  inputClass: string;
+}) {
+  const addItem = () => {
+    onChange([...items, { value: "", label: "" }]);
+  };
+
+  const updateItem = (index: number, field: "value" | "label", val: string) => {
+    const next = [...items];
+    next[index] = { ...next[index], [field]: val };
+    // Auto-generate value from label if value is empty
+    if (field === "label" && !next[index].value) {
+      next[index].value = val.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    }
+    onChange(next);
+  };
+
+  const removeItem = (index: number) => {
+    onChange(items.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/40 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{label}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={addItem}
+          className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors shrink-0"
+        >
+          <Plus size={13} /> Add
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-xs text-slate-400 italic py-2">No {label.toLowerCase()} configured — products will have no {label.toLowerCase()} dimension.</p>
+      ) : (
+        <div className="space-y-2">
+          {/* Header */}
+          <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider px-0.5">
+            <div className="col-span-4">Value (stored)</div>
+            <div className="col-span-7">Display Label</div>
+            <div className="col-span-1"></div>
+          </div>
+
+          {items.map((item, i) => (
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+              <div className="col-span-1 sm:col-span-4">
+                <input
+                  type="text"
+                  value={item.value}
+                  onChange={(e) => updateItem(i, "value", e.target.value)}
+                  className={inputClass + " text-xs font-mono"}
+                  placeholder={valuePlaceholder}
+                />
+              </div>
+              <div className="col-span-1 sm:col-span-7">
+                <input
+                  type="text"
+                  value={item.label}
+                  onChange={(e) => updateItem(i, "label", e.target.value)}
+                  className={inputClass + " text-xs"}
+                  placeholder={labelPlaceholder}
+                />
+              </div>
+              <div className="col-span-1 sm:col-span-1 flex justify-end sm:justify-center">
+                <button
+                  type="button"
+                  onClick={() => removeItem(i)}
+                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                  title="Remove"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

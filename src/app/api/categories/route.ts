@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 
 const MAX_DEPTH = 3;
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const categories = await prisma.category.findMany({
@@ -74,6 +76,8 @@ export async function POST(req: Request) {
         level,
         parentId: parentId ?? null,
         sortOrder: sortOrder ?? 0,
+        variantTiers: body.variantTiers ?? [],
+        variantFinishes: body.variantFinishes ?? [],
       },
     });
     return NextResponse.json(category, { status: 201 });

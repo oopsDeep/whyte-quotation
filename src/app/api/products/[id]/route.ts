@@ -13,6 +13,7 @@ export async function GET(_req: Request, context: RouteContext) {
       where: { id: Number(id) },
       include: {
         category: { include: { parent: { include: { parent: true } } } },
+        variants: { orderBy: { sortOrder: "asc" } },
       },
     });
     if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -42,9 +43,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       "description",
       "type",
       "categoryId",
-      "price",
       "unit",
       "imageUrl",
+      "moduleSize",
       "notes",
       "isActive",
       "sortOrder",
@@ -57,13 +58,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       }
     }
 
-    if (data.price !== undefined) {
-      const nextPrice = Number(data.price);
-      if (!Number.isFinite(nextPrice) || nextPrice < 0) {
-        return NextResponse.json({ error: "Price must be a valid non-negative number" }, { status: 400 });
-      }
-      data.price = nextPrice;
-    }
+    // price field removed — pricing is now in ProductVariant table
 
     if (data.sortOrder !== undefined) {
       const nextSortOrder = Number(data.sortOrder);
@@ -100,10 +95,48 @@ export async function PATCH(req: Request, context: RouteContext) {
       }
     }
 
-    const product = await prisma.product.update({
-      where: { id: productId },
-      data,
+    // Handle variants separately if provided
+    const variantsInput = body.variants;
+
+    const product = await prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id: productId },
+        data,
+      });
+
+      // If variants array is provided, replace all variants
+      if (Array.isArray(variantsInput)) {
+        // Validate variant prices
+        for (const v of variantsInput) {
+          const price = Number(v.price);
+          if (!Number.isFinite(price) || price < 0) {
+            throw new Error("All variant prices must be valid non-negative numbers");
+          }
+        }
+
+        // Delete existing variants and recreate
+        await tx.productVariant.deleteMany({ where: { productId } });
+        for (let i = 0; i < variantsInput.length; i++) {
+          const v = variantsInput[i];
+          await tx.productVariant.create({
+            data: {
+              productId,
+              automationTier: v.automationTier || null,
+              surfaceFinish: v.surfaceFinish || null,
+              price: Number(v.price),
+              sortOrder: i,
+              isActive: v.isActive ?? true,
+            },
+          });
+        }
+      }
+
+      return tx.product.findUnique({
+        where: { id: productId },
+        include: { variants: { orderBy: { sortOrder: "asc" } } },
+      });
     });
+
     return NextResponse.json(product);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {

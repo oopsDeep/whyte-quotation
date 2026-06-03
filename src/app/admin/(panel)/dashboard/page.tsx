@@ -58,7 +58,7 @@ export default async function DashboardPage() {
       {/* Quick Links */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-8">
         {[
-          { href: "/admin/categories", label: "Manage Categories", icon: Tag, desc: "3-level product tree" },
+          { href: "/admin/categories", label: "Manage Categories", icon: Tag, desc: "Flat product lines & series" },
           { href: "/admin/house-types", label: "House Types", icon: Home, desc: "Room templates" },
         ].map((link) => {
           const Icon = link.icon;

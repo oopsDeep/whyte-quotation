@@ -2,15 +2,10 @@
 import { Product } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, Package } from "lucide-react";
-import ProductTags from "./ProductTags";
 
 interface Props {
   product: Product;
   onAdd: () => void;
-  /** IDs of currently active category filters — tags matching these are hidden */
-  activeFilterIds?: number[];
-  /** Compact mode for mobile horizontal scroller */
-  compact?: boolean;
 }
 
 const typeColors: Record<string, string> = {
@@ -33,103 +28,38 @@ const typeLabels: Record<string, string> = {
   other: "Other",
 };
 
-export default function ProductCard({ product, onAdd, activeFilterIds = [], compact = false }: Props) {
-  if (compact) {
-    return (
-      <article className="h-full bg-white border border-slate-200 rounded-xl p-3 hover:border-blue-300 hover:shadow-md hover:shadow-blue-100/30 transition-all duration-200 flex flex-col">
-        {product.imageUrl ? (
-          <div className="w-full h-20 bg-white rounded-lg mb-2.5 flex items-center justify-center border border-slate-100 overflow-hidden">
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-contain"
-            />
-          </div>
-        ) : (
-          <div className="w-full h-20 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-2.5 flex items-center justify-center border border-slate-100">
-            <Package size={24} className="text-slate-300" />
-          </div>
-        )}
-
-        <div className="flex-1 min-h-0">
-          <div className="flex items-start gap-1 mb-1.5">
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-none ${typeColors[product.type] ?? typeColors.other}`}>
-              {typeLabels[product.type] ?? product.type}
-            </span>
-          </div>
-
-          <h3 className="font-medium text-slate-900 text-xs leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
-          {product.code && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{product.code}</p>}
-        </div>
-
-        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-          <div>
-            <p className="font-semibold text-slate-900 text-sm leading-none">{formatCurrency(product.price)}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">per {product.unit}</p>
-          </div>
-
-          <button
-            onClick={onAdd}
-            className="shrink-0 inline-flex items-center justify-center h-9 px-3 bg-whyte-blue text-white text-xs font-semibold rounded-lg hover:bg-whyte-light transition-colors"
-          >
-            <Plus size={12} className="mr-0.5" /> Add
-          </button>
-        </div>
-      </article>
-    );
-  }
-
+export default function ProductCard({ product, onAdd }: Props) {
   return (
-    <article className="h-full min-h-[300px] bg-white border border-slate-200 rounded-2xl p-4 hover:border-blue-300 hover:shadow-md hover:shadow-blue-100/30 transition-all duration-200 flex flex-col">
-      {product.imageUrl ? (
-        <div className="w-full h-28 bg-white rounded-xl mb-3.5 flex items-center justify-center border border-slate-100 overflow-hidden">
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full h-full object-contain"
-          />
-        </div>
-      ) : (
-        <div className="w-full h-28 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl mb-3.5 flex items-center justify-center border border-slate-100">
-          <Package size={30} className="text-slate-300" />
-        </div>
-      )}
+    <div className="bg-white border border-gray-100 rounded-xl p-3 md:p-4 lg:p-5 hover:border-blue-200 hover:shadow-md transition-all group flex flex-col">
+      {/* Placeholder for image */}
+      <div className="w-full h-24 md:h-28 lg:h-32 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg mb-3 md:mb-4 flex items-center justify-center">
+        <Package size={28} className="text-gray-300 md:scale-110" />
+      </div>
 
-      <div className="flex-1 min-h-0">
-        <div className="flex items-start justify-between gap-1.5 mb-2">
-          <span className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium ${typeColors[product.type] ?? typeColors.other}`}>
-            {typeLabels[product.type] ?? product.type}
-          </span>
-          {/* Context-aware tags — hides already-filtered levels, condenses in 'All Products' */}
-          <ProductTags
-            product={product}
-            activeFilterIds={activeFilterIds}
-            mode="card"
-            className="justify-end"
-          />
-        </div>
-
-        <h3 className="font-medium text-slate-900 text-sm md:text-base leading-snug line-clamp-2 min-h-[2.6rem]">{product.name}</h3>
-        {product.code && <p className="text-xs text-slate-400 font-mono mt-1">{product.code}</p>}
-
+      <div className="flex-1">
+        <span className={`inline-flex items-center px-1.5 py-0.5 md:px-2 md:py-1 rounded-md text-xs md:text-sm font-medium mb-1 md:mb-1.5 ${typeColors[product.type] ?? typeColors.other}`}>
+          {typeLabels[product.type] ?? product.type}
+        </span>
+        <p className="font-semibold text-gray-900 text-sm md:text-base lg:text-lg leading-tight mb-0.5 md:mb-1">{product.name}</p>
+        {product.code && <p className="text-xs md:text-sm text-gray-400 font-mono mb-1 md:mb-1.5">{product.code}</p>}
         {product.description && (
-          <p className="text-xs md:text-sm text-slate-500 line-clamp-2 mt-2 min-h-[2.4rem]">{product.description}</p>
+          <p className="text-xs md:text-sm text-gray-500 line-clamp-2 mb-2 md:mb-3">{product.description}</p>
         )}
       </div>
 
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between mt-2 md:mt-3">
         <div>
-          <p className="font-semibold text-slate-900 text-base md:text-lg leading-none">{formatCurrency(product.price)}</p>
-          <p className="text-xs text-slate-400 mt-1">per {product.unit}</p>
+          <p className="font-bold text-gray-900 text-sm md:text-base lg:text-lg">{formatCurrency(product.price)}</p>
+          <p className="text-xs md:text-sm text-gray-400">/{product.unit}</p>
         </div>
-
         <button
           onClick={onAdd}
-          className="shrink-0 inline-flex items-center justify-center min-w-[88px] h-10 px-4 bg-whyte-blue text-white text-sm font-semibold rounded-lg hover:bg-whyte-light transition-colors"
+          className="flex items-center gap-1 md:gap-1.5 px-3 py-1.5 md:px-3.5 md:py-2 bg-whyte-blue text-white text-xs md:text-sm font-semibold rounded-lg hover:bg-whyte-light transition-colors"
         >
-          <Plus size={14} className="mr-1" /> Add
+          <Plus size={13} />
+          Add
         </button>
       </div>
-    </article>
+    </div>
   );
 }

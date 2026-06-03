@@ -22,6 +22,8 @@ export default function NewQuotationForm({ initialHouseTypes }: NewQuotationForm
     clientEmail: "",
     clientAddress: "",
     houseTypeId: "",
+    defaultTier: "",
+    defaultFinish: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,6 +44,8 @@ export default function NewQuotationForm({ initialHouseTypes }: NewQuotationForm
           ...form,
           clientGstNumber: form.clientGstNumber.trim() || null,
           houseTypeId: form.houseTypeId ? Number(form.houseTypeId) : null,
+          defaultTier: form.defaultTier || null,
+          defaultFinish: form.defaultFinish || null,
         }),
       });
 
@@ -140,6 +144,37 @@ export default function NewQuotationForm({ initialHouseTypes }: NewQuotationForm
               ))}
             </select>
             <p className="text-xs text-gray-400 mt-1">Rooms will be auto-populated based on house type</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Automation Tier</label>
+              <select
+                value={form.defaultTier}
+                onChange={(e) => setForm({ ...form, defaultTier: e.target.value })}
+                className={inputClass}
+              >
+                <option value="">— None (pick per product) —</option>
+                <option value="remote">Remote Based</option>
+                <option value="wifi">WiFi</option>
+                <option value="zigbee">Zigbee</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Auto-selects this tier when adding switch boards</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Surface Finish</label>
+              <select
+                value={form.defaultFinish}
+                onChange={(e) => setForm({ ...form, defaultFinish: e.target.value })}
+                className={inputClass}
+              >
+                <option value="">— None (pick per product) —</option>
+                <option value="acrylic">Acrylic</option>
+                <option value="glass">Glass</option>
+                <option value="metal">Metal</option>
+                <option value="wood">Wood</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Auto-selects this finish when adding products</p>
+            </div>
           </div>
           <button
             type="submit"

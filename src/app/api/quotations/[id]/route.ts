@@ -17,19 +17,7 @@ export async function GET(_req: Request, context: RouteContext) {
           include: {
             roomType: true,
             items: {
-              include: {
-                product: {
-                  include: {
-                    category: {
-                      include: {
-                        parent: {
-                          include: { parent: true },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
+              include: { product: true },
               orderBy: { sortOrder: "asc" },
             },
           },

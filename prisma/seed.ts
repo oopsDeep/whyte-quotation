@@ -6,6 +6,91 @@ import "dotenv/config";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
+// Helper to create a product with its variants in one go
+async function upsertProductWithVariants(
+  product: {
+    name: string;
+    code: string;
+    type: ProductType;
+    unit?: string;
+    categoryId?: number;
+    description?: string;
+    moduleSize?: string;
+    sortOrder?: number;
+  },
+  variants: Array<{
+    automationTier: string | null;
+    surfaceFinish: string | null;
+    price: number;
+  }>
+) {
+  const existing = await prisma.product.findFirst({ where: { code: product.code } });
+  let productId: number;
+
+  if (existing) {
+    productId = existing.id;
+    // Update product fields (not variants — handled below)
+    await prisma.product.update({
+      where: { id: productId },
+      data: {
+        name: product.name,
+        type: product.type,
+        unit: product.unit ?? "pcs",
+        categoryId: product.categoryId ?? null,
+        description: product.description ?? null,
+        moduleSize: product.moduleSize ?? null,
+      },
+    });
+  } else {
+    const created = await prisma.product.create({
+      data: {
+        name: product.name,
+        code: product.code,
+        type: product.type,
+        unit: product.unit ?? "pcs",
+        categoryId: product.categoryId ?? null,
+        description: product.description ?? null,
+        moduleSize: product.moduleSize ?? null,
+        sortOrder: product.sortOrder ?? 0,
+        isActive: true,
+      },
+    });
+    productId = created.id;
+  }
+
+  // Upsert variants — use findFirst because composite unique has nullable fields
+  for (let i = 0; i < variants.length; i++) {
+    const v = variants[i];
+    const existing = await prisma.productVariant.findFirst({
+      where: {
+        productId,
+        automationTier: v.automationTier,
+        surfaceFinish: v.surfaceFinish,
+      },
+    });
+
+    if (existing) {
+      await prisma.productVariant.update({
+        where: { id: existing.id },
+        data: { price: v.price, sortOrder: i },
+      });
+    } else {
+      await prisma.productVariant.create({
+        data: {
+          productId,
+          automationTier: v.automationTier,
+          surfaceFinish: v.surfaceFinish,
+          price: v.price,
+          sortOrder: i,
+          isActive: true,
+        },
+      });
+    }
+  }
+
+  return productId;
+}
+
 async function main() {
   console.log("🌱 Starting seed...");
 
@@ -48,7 +133,7 @@ async function main() {
   });
   console.log("✅ Admin user (admin / admin)");
 
-  // ── Room Types (32) ──
+  // ── Room Types (28) ──
   const roomTypes = [
     { name: "Living Room", icon: "🛋️" },
     { name: "Master Bedroom", icon: "🛏️" },
@@ -93,7 +178,7 @@ async function main() {
     });
   }
 
-  // Keep bathroom-like room types out of active defaults even in previously seeded DBs.
+  // Deactivate bathroom-like room types
   const excludedRoomTypes = await prisma.roomType.findMany({
     where: {
       OR: [
@@ -251,7 +336,6 @@ async function main() {
     },
   ];
 
-  // Get all room types for lookup
   const allRoomTypes = await prisma.roomType.findMany();
   const roomTypeMap = new Map(allRoomTypes.map((rt) => [rt.name, rt.id]));
 
@@ -268,7 +352,6 @@ async function main() {
       },
     });
 
-    // Clear existing templates and recreate
     await prisma.houseTypeRoomTemplate.deleteMany({ where: { houseTypeId: ht.id } });
     for (let j = 0; j < htData.rooms.length; j++) {
       const roomTypeId = roomTypeMap.get(htData.rooms[j].name);
@@ -286,154 +369,273 @@ async function main() {
   }
   console.log(`✅ ${houseTypesData.length} House Types with room templates`);
 
-  // ── Categories (variable-depth tree: 2-level and 3-level examples) ──
-  const categories: Array<{
-    name: string;
-    children?: Array<{
-      name: string;
-      children?: Array<{ name: string }>;
-    }>;
-  }> = [
+  // ── Categories (Flat Series/Categories) ──
+  // Disconnect categories from products first to avoid foreign key issues
+  await prisma.product.updateMany({ data: { categoryId: null } });
+  // Clean up all existing categories to ensure we don't have stale levels 2/3
+  await prisma.category.deleteMany({});
+
+  const seedCategories = [
     {
-      // 3-level: Series → Category → Subcategory
-      name: "Tactus",
-      children: [
-        {
-          name: "Glass",
-          children: [{ name: "Wifi" }, { name: "Zigbee" }, { name: "Remote" }],
-        },
-        {
-          name: "Acrylic",
-          children: [{ name: "Wifi" }, { name: "Zigbee" }, { name: "Remote" }],
-        },
+      id: 1, name: "Tactus",
+      variantTiers: [
+        { value: "remote", label: "Remote Control" },
+        { value: "wifi", label: "WiFi Smart" },
+        { value: "zigbee", label: "Zigbee Protocol" },
+      ],
+      variantFinishes: [
+        { value: "acrylic", label: "Acrylic Panel" },
+        { value: "glass", label: "Glass Panel" },
       ],
     },
     {
-      // 3-level
-      name: "Tactus Edge",
-      children: [
-        {
-          name: "Glass",
-          children: [{ name: "Wifi" }, { name: "Zigbee" }],
-        },
-        {
-          name: "Acrylic",
-          children: [{ name: "Wifi" }, { name: "Zigbee" }],
-        },
+      id: 2, name: "Tactus Edge",
+      variantTiers: [
+        { value: "wifi", label: "WiFi Smart" },
+        { value: "zigbee", label: "Zigbee Protocol" },
+      ],
+      variantFinishes: [
+        { value: "acrylic", label: "Acrylic Panel" },
+        { value: "glass", label: "Glass Panel" },
       ],
     },
     {
-      // 3-level
-      name: "Tactus VLuxe",
-      children: [
-        {
-          name: "Metal",
-          children: [{ name: "Wifi" }, { name: "Zigbee" }],
-        },
-        {
-          name: "Glass",
-          children: [{ name: "Wifi" }],
-        },
+      id: 3, name: "Tactus VLuxe",
+      variantTiers: [
+        { value: "wifi", label: "WiFi Smart" },
+        { value: "zigbee", label: "Zigbee Protocol" },
+      ],
+      variantFinishes: [
+        { value: "metal", label: "Metal Plate" },
+        { value: "glass", label: "Glass Panel" },
       ],
     },
     {
-      // 2-level ONLY: Series → Category (no subcategory)
-      name: "Retro Series",
-      children: [
-        { name: "Metal" },
-        { name: "Wood" },
+      id: 4, name: "Retro Series",
+      variantTiers: [],
+      variantFinishes: [
+        { value: "metal", label: "Metal Plate" },
+        { value: "wood", label: "Wood Finish" },
       ],
     },
+    {
+      id: 5, name: "Retrofit Modules",
+      variantTiers: [
+        { value: "wifi", label: "WiFi Smart" },
+        { value: "zigbee", label: "Zigbee Protocol" },
+      ],
+      variantFinishes: [],
+    },
+    { id: 6, name: "Accessories", variantTiers: [], variantFinishes: [] },
+    { id: 7, name: "Smart Curtains", variantTiers: [], variantFinishes: [] },
+    { id: 8, name: "Smart Locks", variantTiers: [], variantFinishes: [] },
+    { id: 9, name: "Video Door Phones (VDP)", variantTiers: [], variantFinishes: [] },
   ];
 
-  for (let i = 0; i < categories.length; i++) {
-    const l1 = await prisma.category.upsert({
-      where: { id: i * 100 + 1 },
-      update: { name: categories[i].name },
-      create: {
-        id: i * 100 + 1,
-        name: categories[i].name,
+  for (const cat of seedCategories) {
+    await prisma.category.create({
+      data: {
+        id: cat.id,
+        name: cat.name,
         level: 1,
-        sortOrder: i * 10,
+        parentId: null,
+        sortOrder: cat.id * 10,
+        isActive: true,
+        variantTiers: cat.variantTiers,
+        variantFinishes: cat.variantFinishes,
       },
     });
-
-    for (let j = 0; j < (categories[i].children?.length ?? 0); j++) {
-      const l2Data = categories[i].children![j];
-      const l2 = await prisma.category.upsert({
-        where: { id: i * 100 + (j + 1) * 10 + 1 },
-        update: { name: l2Data.name },
-        create: {
-          id: i * 100 + (j + 1) * 10 + 1,
-          name: l2Data.name,
-          level: 2,
-          parentId: l1.id,
-          sortOrder: j * 10,
-        },
-      });
-
-      for (let k = 0; k < (l2Data.children?.length ?? 0); k++) {
-        await prisma.category.upsert({
-          where: { id: i * 100 + (j + 1) * 10 + k + 2 },
-          update: { name: l2Data.children![k].name },
-          create: {
-            id: i * 100 + (j + 1) * 10 + k + 2,
-            name: l2Data.children![k].name,
-            level: 3,
-            parentId: l2.id,
-            sortOrder: k * 10,
-          },
-        });
-      }
-    }
   }
-  console.log("✅ Categories (variable-depth tree)");
+  console.log("✅ Categories (Flat Series/Product Lines)");
 
-  // ── Sample Products ──
-  // Category IDs from seed: Tactus→Glass→Wifi=12, Tactus→Glass→Zigbee=13,
-  // Tactus→Acrylic→Wifi=22, Tactus Edge→Glass→Wifi=112,
-  // Retro→Metal=311 (2-level leaf), Retro→Wood=321 (2-level leaf)
-  const products = [
-    { name: "8S-6M Touch Panel", code: "8S-6M", type: ProductType.switch_board, price: 4500, unit: "pcs", categoryId: 12, description: "8 Switch 6 Module Glass Wifi Panel" },
-    { name: "4S-4M Touch Panel", code: "4S-4M", type: ProductType.switch_board, price: 3200, unit: "pcs", categoryId: 12, description: "4 Switch 4 Module Glass Wifi Panel" },
-    { name: "2S-2M Touch Panel", code: "2S-2M", type: ProductType.switch_board, price: 2200, unit: "pcs", categoryId: 12, description: "2 Switch 2 Module Glass Wifi Panel" },
-    { name: "Fan Regulator Panel", code: "FAN-REG", type: ProductType.switch_board, price: 2800, unit: "pcs", categoryId: 22, description: "Acrylic Wifi Fan Regulator with display" },
-    { name: "Zigbee 4S-4M Panel", code: "ZB-4S4M", type: ProductType.switch_board, price: 3800, unit: "pcs", categoryId: 13, description: "Zigbee 4 Switch Glass Panel" },
-    { name: "Smart Scene Switch", code: "SCN-04", type: ProductType.switch_board, price: 3500, unit: "pcs", categoryId: 12, description: "4 Scene push-button panel" },
-    { name: "Edge 4S Panel", code: "EDGE-4S", type: ProductType.switch_board, price: 4200, unit: "pcs", categoryId: 112, description: "Tactus Edge Glass Wifi 4 Switch Panel" },
-    { name: "Retro Metal Switch", code: "RETRO-M1", type: ProductType.switch_board, price: 2000, unit: "pcs", categoryId: 311, description: "Retro Series Metal finish switch" },
-    { name: "Retro Wood Switch", code: "RETRO-W1", type: ProductType.switch_board, price: 2500, unit: "pcs", categoryId: 321, description: "Retro Series Wood finish switch" },
-    { name: "Curtain Motor", code: "CURT-M1", type: ProductType.curtain, price: 8500, unit: "set", description: "WiFi Smart Curtain Motor with rail" },
-    { name: "Curtain Remote", code: "CURT-R1", type: ProductType.accessory, price: 1200, unit: "pcs", description: "RF Remote for curtain motor" },
-    { name: "Smart Door Lock", code: "SDL-100", type: ProductType.smart_lock, price: 25000, unit: "pcs", description: "Fingerprint + RFID + PIN smart lock" },
-    { name: "VDP Indoor Unit", code: "VDP-IN", type: ProductType.vdp, price: 15000, unit: "pcs", description: "7 inch indoor display unit" },
-    { name: "VDP Outdoor Unit", code: "VDP-OUT", type: ProductType.vdp, price: 8000, unit: "pcs", description: "Outdoor camera unit with intercom" },
-    { name: "Smart IR Blaster", code: "IR-BL01", type: ProductType.accessory, price: 2500, unit: "pcs", description: "Universal IR blaster for AC/TV control" },
-    { name: "Motion Sensor", code: "MS-01", type: ProductType.accessory, price: 1800, unit: "pcs", description: "PIR motion sensor with WiFi" },
-    { name: "Zigbee Gateway", code: "ZB-GW01", type: ProductType.accessory, price: 4500, unit: "pcs", description: "Zigbee Hub/Gateway for Zigbee devices" },
-    { name: "WiFi Gateway", code: "WF-GW01", type: ProductType.accessory, price: 3500, unit: "pcs", description: "WiFi Gateway for centralized control" },
+  // ══════════════════════════════════════════════════════════════
+  // ── Products with Variants ──
+  // Each product gets variant rows for its pricing combinations.
+  // Real Tactus Pricelist 2026 data for switch boards.
+  // ══════════════════════════════════════════════════════════════
+
+  // --- TACTUS Switch Boards (6 variants each: remote/wifi/zigbee × acrylic/glass) ---
+  // Category: Tactus (id=1) — linked at series level
+
+  const tactus6Variants = (ra: number, rg: number, wa: number, wg: number, za: number, zg: number) => [
+    { automationTier: "remote", surfaceFinish: "acrylic", price: ra },
+    { automationTier: "remote", surfaceFinish: "glass", price: rg },
+    { automationTier: "wifi", surfaceFinish: "acrylic", price: wa },
+    { automationTier: "wifi", surfaceFinish: "glass", price: wg },
+    { automationTier: "zigbee", surfaceFinish: "acrylic", price: za },
+    { automationTier: "zigbee", surfaceFinish: "glass", price: zg },
   ];
 
-  for (const p of products) {
-    // Safe approach: check if product with this code already exists
-    const existing = await prisma.product.findFirst({ where: { code: p.code } });
-    if (!existing) {
-      await prisma.product.create({
-        data: {
-          name: p.name,
-          code: p.code,
-          type: p.type,
-          price: p.price,
-          unit: p.unit,
-          categoryId: p.categoryId ?? null,
-          description: p.description ?? null,
-          sortOrder: 0,
-          isActive: true,
-        },
-      });
-    }
-  }
-  console.log(`✅ ${products.length} Products`);
+  // Touch 4 Switch (All 6A Switch) — 2 Module
+  await upsertProductWithVariants(
+    { name: "Touch 4 Switch (All 6A)", code: "T4S-2M", type: ProductType.switch_board, categoryId: 1, moduleSize: "2M", description: "4 Switch 2 Module Touch Panel", sortOrder: 10 },
+    tactus6Variants(5799, 6599, 8599, 9399, 10699, 11599)
+  );
+
+  // Touch 4 Switch (2-16A + 2-6A) — 2 Module
+  await upsertProductWithVariants(
+    { name: "Touch 4 Switch (2×16A + 2×6A)", code: "T4S16A-2M", type: ProductType.switch_board, categoryId: 1, moduleSize: "2M", description: "4 Switch (2×16A + 2×6A) 2 Module", sortOrder: 20 },
+    tactus6Variants(5799, 6599, 8599, 9399, 10699, 11599)
+  );
+
+  // Touch 6 Switch — 4 Module
+  await upsertProductWithVariants(
+    { name: "Touch 6 Switch", code: "T6S-4M", type: ProductType.switch_board, categoryId: 1, moduleSize: "4M", description: "6 Switch 4 Module Touch Panel", sortOrder: 30 },
+    tactus6Variants(7499, 8399, 10299, 11199, 12399, 13399)
+  );
+
+  // Touch 4 Switch 1 Fan Regulator — 4 Module
+  await upsertProductWithVariants(
+    { name: "Touch 4 Switch 1 Fan", code: "T4S1F-4M", type: ProductType.switch_board, categoryId: 1, moduleSize: "4M", description: "4 Switch + 1 Fan Regulator 4 Module", sortOrder: 40 },
+    tactus6Variants(9099, 10199, 11899, 12999, 13999, 15199)
+  );
+
+  // Touch 8 Switch — 6 Module
+  await upsertProductWithVariants(
+    { name: "Touch 8 Switch", code: "T8S-6M", type: ProductType.switch_board, categoryId: 1, moduleSize: "6M", description: "8 Switch 6 Module Touch Panel", sortOrder: 50 },
+    tactus6Variants(9599, 10699, 12899, 13999, 15199, 16399)
+  );
+
+  // Touch 6 Switch 1 Fan — 6 Module
+  await upsertProductWithVariants(
+    { name: "Touch 6 Switch 1 Fan", code: "T6S1F-6M", type: ProductType.switch_board, categoryId: 1, moduleSize: "6M", description: "6 Switch + 1 Fan Regulator 6 Module", sortOrder: 60 },
+    tactus6Variants(11399, 12699, 14599, 15899, 17099, 18499)
+  );
+
+  // Touch 8 Switch 1 Fan — 8 Module
+  await upsertProductWithVariants(
+    { name: "Touch 8 Switch 1 Fan", code: "T8S1F-8M", type: ProductType.switch_board, categoryId: 1, moduleSize: "8M", description: "8 Switch + 1 Fan Regulator 8 Module", sortOrder: 70 },
+    tactus6Variants(13499, 15099, 17099, 18699, 20099, 21799)
+  );
+
+  // Touch 10 Switch — 8 Module
+  await upsertProductWithVariants(
+    { name: "Touch 10 Switch", code: "T10S-8M", type: ProductType.switch_board, categoryId: 1, moduleSize: "8M", description: "10 Switch 8 Module Touch Panel", sortOrder: 80 },
+    tactus6Variants(12599, 14099, 16399, 17899, 19199, 20899)
+  );
+
+  // Touch 10 Switch 2 Fan — 12 Module
+  await upsertProductWithVariants(
+    { name: "Touch 10 Switch 2 Fan", code: "T10S2F-12M", type: ProductType.switch_board, categoryId: 1, moduleSize: "12M", description: "10 Switch + 2 Fan Regulator 12 Module", sortOrder: 90 },
+    tactus6Variants(20599, 23099, 26199, 28699, 30299, 32899)
+  );
+
+  // Touch 12 Switch 2 Fan — 12 Module
+  await upsertProductWithVariants(
+    { name: "Touch 12 Switch 2 Fan", code: "T12S2F-12M", type: ProductType.switch_board, categoryId: 1, moduleSize: "12M", description: "12 Switch + 2 Fan Regulator 12 Module", sortOrder: 100 },
+    tactus6Variants(22599, 25099, 28199, 30699, 32499, 34999)
+  );
+
+  // Bell + Touch 2 Switch — 2 Module
+  await upsertProductWithVariants(
+    { name: "Bell + Touch 2 Switch", code: "BL2S-2M", type: ProductType.switch_board, categoryId: 1, moduleSize: "2M", description: "Bell + 2 Switch 2 Module", sortOrder: 110 },
+    tactus6Variants(4299, 4999, 6699, 7399, 8199, 8999)
+  );
+
+  // 4 Scene Controller — 2 Module
+  await upsertProductWithVariants(
+    { name: "4 Scene Controller", code: "SCN4-2M", type: ProductType.switch_board, categoryId: 1, moduleSize: "2M", description: "4 Scene Push Button Controller", sortOrder: 120 },
+    tactus6Variants(5499, 6299, 7999, 8799, 9599, 10499)
+  );
+
+  // Curtain Controller — 2 Module
+  await upsertProductWithVariants(
+    { name: "Curtain Controller (Touch)", code: "CURT-2M", type: ProductType.switch_board, categoryId: 1, moduleSize: "2M", description: "Touch Curtain Controller Panel", sortOrder: 130 },
+    tactus6Variants(5299, 5999, 7799, 8499, 9199, 9999)
+  );
+
+  // --- Single-price products (1 variant each: null tier + null finish) ---
+
+  // Accessories
+  await upsertProductWithVariants(
+    { name: "Smart IR Blaster", code: "IR-BL01", type: ProductType.accessory, categoryId: 6, description: "Universal IR blaster for AC/TV control", sortOrder: 200 },
+    [{ automationTier: null, surfaceFinish: null, price: 2500 }]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Motion Sensor", code: "MS-01", type: ProductType.accessory, categoryId: 6, description: "PIR motion sensor with WiFi", sortOrder: 210 },
+    [{ automationTier: null, surfaceFinish: null, price: 1800 }]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Zigbee Gateway", code: "ZB-GW01", type: ProductType.accessory, categoryId: 6, description: "Zigbee Hub/Gateway for Zigbee devices", sortOrder: 220 },
+    [{ automationTier: null, surfaceFinish: null, price: 4500 }]
+  );
+
+  await upsertProductWithVariants(
+    { name: "WiFi Gateway", code: "WF-GW01", type: ProductType.accessory, categoryId: 6, description: "WiFi Gateway for centralized control", sortOrder: 230 },
+    [{ automationTier: null, surfaceFinish: null, price: 3500 }]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Curtain Remote", code: "CURT-R1", type: ProductType.accessory, categoryId: 6, description: "RF Remote for curtain motor", sortOrder: 240 },
+    [{ automationTier: null, surfaceFinish: null, price: 1200 }]
+  );
+
+  // Curtain
+  await upsertProductWithVariants(
+    { name: "Curtain Motor", code: "CURT-M1", type: ProductType.curtain, categoryId: 7, unit: "set", description: "WiFi Smart Curtain Motor with rail", sortOrder: 300 },
+    [{ automationTier: null, surfaceFinish: null, price: 8500 }]
+  );
+
+  // Smart Locks
+  await upsertProductWithVariants(
+    { name: "Smart Door Lock Series 1 Pro", code: "SDL-S1P", type: ProductType.smart_lock, categoryId: 8, description: "Fingerprint + RFID + PIN smart lock", sortOrder: 400 },
+    [{ automationTier: null, surfaceFinish: null, price: 25000 }]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Smart Door Lock Series 4", code: "SDL-S4", type: ProductType.smart_lock, categoryId: 8, description: "Advanced smart lock with multiple access", sortOrder: 410 },
+    [{ automationTier: null, surfaceFinish: null, price: 35000 }]
+  );
+
+  // VDP
+  await upsertProductWithVariants(
+    { name: "VDP Indoor Unit", code: "VDP-IN", type: ProductType.vdp, categoryId: 9, description: "7 inch indoor display unit", sortOrder: 500 },
+    [{ automationTier: null, surfaceFinish: null, price: 15000 }]
+  );
+
+  await upsertProductWithVariants(
+    { name: "VDP Outdoor Unit", code: "VDP-OUT", type: ProductType.vdp, categoryId: 9, description: "Outdoor camera unit with intercom", sortOrder: 510 },
+    [{ automationTier: null, surfaceFinish: null, price: 8000 }]
+  );
+
+  // --- Retrofit (2 variants each: wifi/zigbee, no finish) ---
+  await upsertProductWithVariants(
+    { name: "Retrofit Mono", code: "RETRO-MONO", type: ProductType.retrofit, categoryId: 5, description: "1-channel retrofit switch module", sortOrder: 600 },
+    [
+      { automationTier: "wifi", surfaceFinish: null, price: 1999 },
+      { automationTier: "zigbee", surfaceFinish: null, price: 2499 },
+    ]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Retrofit Duo", code: "RETRO-DUO", type: ProductType.retrofit, categoryId: 5, description: "2-channel retrofit switch module", sortOrder: 610 },
+    [
+      { automationTier: "wifi", surfaceFinish: null, price: 2499 },
+      { automationTier: "zigbee", surfaceFinish: null, price: 2999 },
+    ]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Retrofit Quad", code: "RETRO-QUAD", type: ProductType.retrofit, categoryId: 5, description: "4-channel retrofit switch module", sortOrder: 620 },
+    [
+      { automationTier: "wifi", surfaceFinish: null, price: 3499 },
+      { automationTier: "zigbee", surfaceFinish: null, price: 3999 },
+    ]
+  );
+
+  await upsertProductWithVariants(
+    { name: "Retrofit Hexa", code: "RETRO-HEXA", type: ProductType.retrofit, categoryId: 5, description: "6-channel retrofit switch module", sortOrder: 630 },
+    [
+      { automationTier: "wifi", surfaceFinish: null, price: 4499 },
+      { automationTier: "zigbee", surfaceFinish: null, price: 4999 },
+    ]
+  );
+
+  const productCount = await prisma.product.count();
+  const variantCount = await prisma.productVariant.count();
+  console.log(`✅ ${productCount} Products with ${variantCount} Variants`);
 
   console.log("\n🎉 Seed completed!");
 }

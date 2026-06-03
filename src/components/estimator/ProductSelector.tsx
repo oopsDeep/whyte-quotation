@@ -50,29 +50,40 @@ export default function ProductSelector({
 
   /**
    * Category filter logic:
-   * Uses the deepest selected category ID and checks whether each product's
-   * category is that ID or a descendant of it. Works for any hierarchy depth
-   * (1-level, 2-level, or 3-level). Products with no category are shown only
-   * when no category filter is active.
+   * The API returns products with their category, and each category has the
+   * full parent chain (cat.parent.parent). We filter based on the most specific
+   * selection (l3 > l2 > l1). An exact match on the selected level is required.
+   *
+   * Category tree structure: L1 (Series) → L2 (Tech: WiFi/Zigbee) → L3 (Material: Glass/Acrylic)
+   * Products are assigned to ANY level (L1 for SmartLock/VDP, L2 for Retrofit, L3 for Switch Boards)
    */
   const filteredProducts = useMemo(() => {
     let result = products;
 
-    // Find the deepest selected category ID (most specific filter)
-    const activeFilterId = l3Id ?? l2Id ?? l1Id;
-
-    if (activeFilterId) {
+    // Apply category filter
+    if (l1Id || l2Id || l3Id) {
       result = result.filter((p) => {
         const cat = p.category;
         if (!cat) return false;
 
-        // Walk up the parent chain to check if product belongs under selected category
-        let current: any = cat;
-        while (current) {
-          if (current.id === activeFilterId) return true;
-          current = current.parent ?? null;
+        if (l3Id) {
+          // Most specific: exact L3 match
+          return cat.id === l3Id;
         }
-        return false;
+        if (l2Id) {
+          // L2 match: product is exactly L2 OR L3 whose parent is this L2
+          if (cat.level === 2) return cat.id === l2Id;
+          if (cat.level === 3) return cat.parentId === l2Id;
+          return false;
+        }
+        if (l1Id) {
+          // L1 match: product at L1, L2 child of L1, or L3 grandchild of L1
+          if (cat.level === 1) return cat.id === l1Id;
+          if (cat.level === 2) return cat.parentId === l1Id;
+          if (cat.level === 3) return cat.parent?.parentId === l1Id;
+          return false;
+        }
+        return true;
       });
     }
 
@@ -123,10 +134,10 @@ export default function ProductSelector({
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       {/* Room Header */}
-      <div className="px-3 py-2.5 sm:px-4 sm:py-3 md:px-5 md:py-4 lg:px-6 border-b border-gray-100 bg-gray-50/50 shrink-0">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <h2 className="font-medium text-gray-900 text-sm md:text-base lg:text-lg truncate">
+      <div className="px-4 py-3 md:px-5 md:py-4 lg:px-6 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm md:text-base lg:text-lg">
               {activeRoom.roomType?.icon && <span className="mr-1">{activeRoom.roomType.icon}</span>}
               {activeRoom.customName ?? activeRoom.roomType?.name ?? "Room"}
             </h2>
@@ -134,10 +145,10 @@ export default function ProductSelector({
               {activeRoom.items.length} items • {formatCurrency(roomSubtotal)}
             </p>
           </div>
-          <div className="flex gap-1 md:gap-1.5 bg-gray-100 p-0.5 md:p-1 rounded-lg shrink-0">
+          <div className="flex gap-1 md:gap-1.5 bg-gray-100 p-0.5 md:p-1 rounded-lg">
             <button
               onClick={() => setTab("products")}
-              className={`px-3 py-1.5 md:px-3.5 md:py-1.5 rounded-md text-xs md:text-sm font-medium transition ${
+              className={`px-3 py-1 md:px-3.5 md:py-1.5 rounded-md text-xs md:text-sm font-medium transition ${
                 tab === "products" ? "bg-white shadow-sm text-gray-900" : "text-gray-500"
               }`}
             >
@@ -145,7 +156,7 @@ export default function ProductSelector({
             </button>
             <button
               onClick={() => setTab("items")}
-              className={`px-3 py-1.5 md:px-3.5 md:py-1.5 rounded-md text-xs md:text-sm font-medium transition ${
+              className={`px-3 py-1 md:px-3.5 md:py-1.5 rounded-md text-xs md:text-sm font-medium transition ${
                 tab === "items" ? "bg-white shadow-sm text-gray-900" : "text-gray-500"
               }`}
             >
@@ -184,7 +195,7 @@ export default function ProductSelector({
 
       {tab === "products" && (
         <>
-          <div className="px-3 py-3 sm:px-4 sm:py-4 md:px-5 md:py-5 lg:px-6 border-b border-slate-100 bg-slate-50/60 space-y-3 shrink-0">
+          <div className="px-4 py-4 md:px-5 md:py-5 lg:px-6 border-b border-slate-100 bg-slate-50/60 space-y-3">
             <CategoryFilter
               categories={categories}
               l1Id={l1Id}
@@ -195,8 +206,8 @@ export default function ProductSelector({
               onL3Change={setL3Id}
             />
 
-            <div className="flex flex-col sm:flex-row gap-2.5">
-              <div className="relative flex-1 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2.5">
+              <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -210,7 +221,7 @@ export default function ProductSelector({
 
               <button
                 onClick={onRefreshProducts}
-                className="h-11 px-4 inline-flex items-center justify-center gap-2 border border-slate-200 bg-white rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 shrink-0"
+                className="h-11 px-4 inline-flex items-center justify-center gap-2 border border-slate-200 bg-white rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50"
                 title="Refresh product catalog"
                 type="button"
               >
@@ -221,7 +232,7 @@ export default function ProductSelector({
           </div>
 
           {/* Product Grid */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 lg:p-6 bg-slate-50/30 scroll-smooth">
+          <div className="flex-1 overflow-y-auto p-4 md:p-5 lg:p-6 bg-slate-50/30">
             {filteredProducts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-slate-400">
                 <ShoppingBag size={32} className="mb-2 opacity-30" />
@@ -237,40 +248,15 @@ export default function ProductSelector({
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <p className="text-xs sm:text-sm text-slate-500">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-slate-500">
                     {filteredProducts.length} products available
                   </p>
                 </div>
-
-                {/* Mobile/Tablet: Horizontal scroll with smaller cards */}
-                <div className="lg:hidden overflow-x-auto product-scroll-mobile pb-3 -mx-1 px-1">
-                  <div className="flex gap-3 sm:gap-4">
-                    {filteredProducts.map((p) => (
-                      <div key={p.id} className="w-[180px] sm:w-[220px] md:w-[240px] shrink-0">
-                        <ProductCard
-                          product={p}
-                          onAdd={() => onAddProduct(p.id)}
-                          activeFilterIds={[l1Id, l2Id, l3Id].filter((id): id is number => id !== null)}
-                          compact
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Desktop: Grid layout */}
-                <div className="hidden lg:block">
-                  <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5">
-                    {filteredProducts.map((p) => (
-                      <ProductCard
-                        key={p.id}
-                        product={p}
-                        onAdd={() => onAddProduct(p.id)}
-                        activeFilterIds={[l1Id, l2Id, l3Id].filter((id): id is number => id !== null)}
-                      />
-                    ))}
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5">
+                  {filteredProducts.map((p) => (
+                    <ProductCard key={p.id} product={p} onAdd={() => onAddProduct(p.id)} />
+                  ))}
                 </div>
               </>
             )}

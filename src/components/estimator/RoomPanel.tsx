@@ -54,7 +54,7 @@ export default function RoomPanel({ quotation, roomTypes, activeRoomId, onSelect
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-4 py-3 md:px-5 md:py-4 lg:px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
+      <div className="px-4 py-3 md:px-5 md:py-4 lg:px-6 border-b border-gray-100 flex items-center justify-between">
         <h2 className="font-semibold text-gray-800 text-sm md:text-base lg:text-lg">Rooms</h2>
         <span className="text-xs md:text-sm text-gray-400">{quotation.rooms.length}</span>
       </div>
@@ -75,9 +75,9 @@ export default function RoomPanel({ quotation, roomTypes, activeRoomId, onSelect
                 isActive ? "bg-blue-50" : "hover:bg-gray-50"
               }`}
             >
-              <div className="flex items-center gap-2 md:gap-2.5 min-w-0 flex-1">
+              <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
                 {isActive && <ChevronRight size={14} className="text-whyte-blue shrink-0" />}
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0">
                   <p className={`text-sm md:text-base font-medium truncate ${isActive ? "text-whyte-blue" : "text-gray-800"}`}>
                     {room.roomType?.icon && <span className="mr-1">{room.roomType.icon}</span>}
                     {getRoomName(room)}
@@ -90,7 +90,7 @@ export default function RoomPanel({ quotation, roomTypes, activeRoomId, onSelect
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); setDeleteTarget(room); }}
-                className="opacity-0 group-hover:opacity-100 p-1.5 md:p-2 text-gray-300 hover:text-red-500 transition rounded-lg shrink-0"
+                className="opacity-0 group-hover:opacity-100 p-1 md:p-1.5 text-gray-300 hover:text-red-500 transition rounded-lg"
               >
                 <Trash2 size={14} />
               </button>
@@ -100,10 +100,10 @@ export default function RoomPanel({ quotation, roomTypes, activeRoomId, onSelect
       </div>
 
       {/* Add Room */}
-      <div className="p-3 md:p-4 border-t border-gray-100 shrink-0">
+      <div className="p-3 md:p-4 border-t border-gray-100">
         <button
           onClick={() => setShowAddRoom(true)}
-          className="w-full flex items-center justify-center gap-1.5 md:gap-2 py-2.5 md:py-3 text-sm md:text-base text-whyte-blue font-medium rounded-xl border border-dashed border-blue-200 hover:bg-blue-50 transition"
+          className="w-full flex items-center justify-center gap-1.5 md:gap-2 py-2 md:py-2.5 text-sm md:text-base text-whyte-blue font-medium rounded-xl border border-dashed border-blue-200 hover:bg-blue-50 transition"
         >
           <Plus size={15} />
           Add Room
@@ -161,7 +161,7 @@ export default function RoomPanel({ quotation, roomTypes, activeRoomId, onSelect
           <button
             onClick={handleAdd}
             disabled={adding || (!selectedRoomTypeId && !customRoomName.trim())}
-            className="w-full py-3 bg-whyte-blue text-white font-semibold rounded-xl hover:bg-whyte-light transition disabled:opacity-50 text-sm md:text-base"
+            className="w-full py-2.5 bg-whyte-blue text-white font-semibold rounded-xl hover:bg-whyte-light transition disabled:opacity-50"
           >
             {adding ? "Adding..." : "Add Room"}
           </button>

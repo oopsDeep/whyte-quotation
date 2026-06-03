@@ -50,9 +50,12 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
     }
   };
 
+  const selectClass =
+    "flex-1 px-2 py-1.5 md:px-3 md:py-2 border border-gray-200 rounded-lg text-sm md:text-base focus:outline-none focus:ring-1 focus:ring-blue-200 bg-white";
+
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-4 py-3 md:px-5 md:py-4 lg:px-6 border-b border-gray-100 shrink-0">
+      <div className="px-4 py-3 md:px-5 md:py-4 lg:px-6 border-b border-gray-100">
         <h2 className="font-semibold text-gray-800 text-sm md:text-base lg:text-lg">Summary</h2>
       </div>
 
@@ -65,8 +68,8 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
           if (subtotal === 0) return null;
           const roomName = room.customName ?? room.roomType?.name ?? "Room";
           return (
-            <div key={room.id} className="flex justify-between items-center text-sm md:text-base gap-2">
-              <span className="text-gray-600 truncate min-w-0">
+            <div key={room.id} className="flex justify-between items-center text-sm md:text-base">
+              <span className="text-gray-600 truncate mr-2">
                 {room.roomType?.icon && <span className="mr-1">{room.roomType.icon}</span>}
                 {roomName}
               </span>
@@ -85,8 +88,8 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
             <p className="text-xs md:text-sm font-semibold text-gray-600 mb-2 md:mb-3 uppercase tracking-wide">Product Totals</p>
             <div className="space-y-1.5 md:space-y-2">
               {productTotals.map((item) => (
-                <div key={item.product.id} className="flex justify-between items-center text-xs md:text-sm gap-2">
-                  <span className="text-gray-600 truncate min-w-0">{item.product.name}</span>
+                <div key={item.product.id} className="flex justify-between items-center text-xs md:text-sm">
+                  <span className="text-gray-600 truncate mr-2">{item.product.name}</span>
                   <span className="text-gray-900 font-medium shrink-0">{item.totalQuantity}x</span>
                 </div>
               ))}
@@ -107,7 +110,7 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
         {/* Discount */}
         <div className="border-t border-gray-100 pt-3 md:pt-4">
           <p className="text-xs md:text-sm font-medium text-gray-500 mb-2 md:mb-3">Discount</p>
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-2 md:mb-3">
+          <div className="flex gap-2 md:gap-3 mb-2 md:mb-3">
             <select
               value={discountType}
               onChange={(e) => {
@@ -115,7 +118,7 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
                 setDiscountType(nextType);
                 if (nextType === "none") setDiscountValue(0);
               }}
-              className="flex-1 px-2 py-2 md:px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-200 bg-white"
+              className={selectClass}
             >
               <option value="none">None</option>
               <option value="percentage">Percentage (%)</option>
@@ -129,7 +132,7 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
                 step={discountType === "percentage" ? 0.5 : 1}
                 value={discountValue}
                 onChange={(e) => setDiscountValue(Math.max(0, Number(e.target.value)))}
-                className="w-full sm:w-24 px-2 py-2 md:px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-200 text-center"
+                className="w-20 md:w-24 px-2 py-1.5 md:px-3 md:py-2 border border-gray-200 rounded-lg text-sm md:text-base focus:outline-none focus:ring-1 focus:ring-blue-200 text-center"
               />
             )}
           </div>
@@ -145,7 +148,7 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
           <button
             onClick={handleSaveDiscount}
             disabled={saving || discountType === "none"}
-            className="w-full py-2 md:py-2.5 text-xs md:text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-50"
+            className="w-full py-1.5 md:py-2 text-xs md:text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-50"
           >
             {saving ? "Saving..." : "Apply Discount"}
           </button>
@@ -153,7 +156,7 @@ export default function QuotationSummary({ quotation, onUpdateDiscount }: Props)
       </div>
 
       {/* Final Total */}
-      <div className="p-4 md:p-5 lg:p-6 border-t border-gray-100 bg-whyte-dark rounded-b-2xl shrink-0">
+      <div className="p-4 md:p-5 lg:p-6 border-t border-gray-100 bg-whyte-dark rounded-b-2xl">
         <div className="flex justify-between items-center">
           <span className="font-semibold text-white/80 text-sm md:text-base">Final Total</span>
           <span className="font-bold text-white text-lg md:text-xl lg:text-2xl">{formatCurrency(finalTotal)}</span>

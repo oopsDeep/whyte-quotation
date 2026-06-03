@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { QuotationItem, QuotationRoom } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { Trash2, Minus, Plus, MessageSquareText } from "lucide-react";
-import ProductTags from "./ProductTags";
 
 interface Props {
   item: QuotationItem;
@@ -113,9 +112,8 @@ export default function ItemRow({ item, currentRoomId, allRooms, onUpdate, onDel
   const lineTotal = qty * Number(item.unitPrice);
 
   return (
-    <div className="px-3 py-3 sm:px-4 md:px-5 md:py-4 lg:px-6 hover:bg-gray-50/50 transition">
-      {/* Desktop: single row layout */}
-      <div className="hidden sm:flex items-start gap-3 md:gap-4">
+    <div className="px-4 py-3 md:px-5 md:py-4 lg:px-6 hover:bg-gray-50/50 transition">
+      <div className="flex items-start gap-3 md:gap-4">
         {/* SB Number */}
         <input
           type="text"
@@ -133,11 +131,6 @@ export default function ItemRow({ item, currentRoomId, allRooms, onUpdate, onDel
             {formatCurrency(item.unitPrice)} / {item.product?.unit ?? "pcs"}
             {item.product?.code && <span className="ml-1 font-mono">• {item.product.code}</span>}
           </p>
-          {item.product?.category && (
-            <div className="mt-1">
-              <ProductTags product={item.product} mode="full" />
-            </div>
-          )}
           {allRooms.length > 1 && (
             <div className="mt-1.5">
               <label className="text-[11px] md:text-xs text-gray-400 mr-2">Move to</label>
@@ -221,116 +214,9 @@ export default function ItemRow({ item, currentRoomId, allRooms, onUpdate, onDel
         </div>
       </div>
 
-      {/* Mobile: stacked layout */}
-      <div className="sm:hidden space-y-2.5">
-        {/* Top: Product name + delete */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="font-medium text-gray-900 text-sm truncate">{item.product?.name ?? "Product"}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {formatCurrency(item.unitPrice)} / {item.product?.unit ?? "pcs"}
-              {item.product?.code && <span className="ml-1 font-mono">• {item.product.code}</span>}
-            </p>
-          </div>
-          <div className="flex gap-1.5 shrink-0">
-            <button
-              onClick={() => setShowNotes(!showNotes)}
-              className={`p-2 rounded-lg transition ${
-                showNotes || notes.trim()
-                  ? "text-whyte-blue bg-blue-50"
-                  : "text-gray-300"
-              }`}
-            >
-              <MessageSquareText size={16} />
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="p-2 text-gray-300 hover:text-red-500 transition rounded-lg disabled:opacity-50"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tags */}
-        {item.product?.category && (
-          <div>
-            <ProductTags product={item.product} mode="full" />
-          </div>
-        )}
-
-        {/* Bottom: SB# + Qty Stepper + Total */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="text"
-            value={sbNumber}
-            onChange={(e) => setSbNumber(e.target.value)}
-            placeholder="SB #"
-            title="Switch Board Number"
-            className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-200"
-          />
-
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setQty(Math.max(1, qty - 1))}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-100 transition text-gray-600"
-            >
-              <Minus size={12} />
-            </button>
-            <input
-              type="number"
-              min={1}
-              value={qty}
-              onChange={(e) => {
-                const value = Number(e.target.value);
-                if (Number.isNaN(value)) return;
-                setQty(Math.max(1, Math.floor(value)));
-              }}
-              className="w-12 px-1 py-1 text-center text-sm font-semibold text-gray-900 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-200"
-              aria-label="Quantity"
-            />
-            <button
-              onClick={() => setQty(qty + 1)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-100 transition text-gray-600"
-            >
-              <Plus size={12} />
-            </button>
-          </div>
-
-          <p className="font-semibold text-gray-900 text-sm ml-auto">{formatCurrency(lineTotal)}</p>
-        </div>
-
-        {/* Move to room */}
-        {allRooms.length > 1 && (
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400">Move to</label>
-            <select
-              value={targetRoomId}
-              onChange={(e) => {
-                const next = e.target.value;
-                setTargetRoomId(next);
-                void handleMoveRoom(next);
-              }}
-              disabled={movingRoom}
-              className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-200 disabled:opacity-50"
-            >
-              {allRooms.map((room) => {
-                const roomName = room.customName ?? room.roomType?.name ?? "Room";
-                return (
-                  <option key={room.id} value={room.id}>
-                    {roomName}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        )}
-      </div>
-
       {/* Notes (collapsible) — saved on blur to avoid excessive API calls */}
       {showNotes && (
-        <div className="mt-2 md:mt-3 sm:ml-[68px] md:ml-[84px]">
+        <div className="mt-2 md:mt-3 ml-[68px] md:ml-[84px]">
           <p className="text-[11px] md:text-xs font-medium text-gray-500 mb-1">Customer Note (for site visit/fitting)</p>
           <textarea
             value={notes}

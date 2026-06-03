@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Product, Category } from "@/types";
 import toast from "react-hot-toast";
 import { ImagePlus, X } from "lucide-react";
@@ -20,63 +20,25 @@ interface Props {
   onSuccess: () => void;
 }
 
-/**
- * Given a flat tree of categories (Series with nested children),
- * find a category by id at any level and return the chain:
- * { seriesId, categoryId, subcategoryId }
- */
-function resolveParentChain(
-  categories: Category[],
-  targetId: number
-): { seriesId: string; categoryId: string; subcategoryId: string } {
-  for (const series of categories) {
-    // Target is a Series (level 1)
-    if (series.id === targetId) {
-      return { seriesId: String(series.id), categoryId: "", subcategoryId: "" };
-    }
-    if (series.children) {
-      for (const cat of series.children) {
-        // Target is a Category (level 2)
-        if (cat.id === targetId) {
-          return { seriesId: String(series.id), categoryId: String(cat.id), subcategoryId: "" };
-        }
-        if (cat.children) {
-          for (const sub of cat.children) {
-            // Target is a Subcategory (level 3)
-            if (sub.id === targetId) {
-              return {
-                seriesId: String(series.id),
-                categoryId: String(cat.id),
-                subcategoryId: String(sub.id),
-              };
-            }
-          }
-        }
-      }
+function flattenCategories(cats: Category[], prefix = ""): { id: number; label: string; level: number }[] {
+  const result: { id: number; label: string; level: number }[] = [];
+  for (const cat of cats) {
+    result.push({ id: cat.id, label: prefix + cat.name, level: cat.level });
+    if (cat.children?.length) {
+      result.push(...flattenCategories(cat.children, prefix + "  "));
     }
   }
-  return { seriesId: "", categoryId: "", subcategoryId: "" };
+  return result;
 }
 
 export default function ProductForm({ product, categories, onSuccess }: Props) {
-  // Resolve initial hierarchy from existing product categoryId
-  const initialChain = useMemo(() => {
-    if (product?.categoryId) {
-      return resolveParentChain(categories, product.categoryId);
-    }
-    return { seriesId: "", categoryId: "", subcategoryId: "" };
-  }, [product, categories]);
-
-  const [seriesId, setSeriesId] = useState(initialChain.seriesId);
-  const [categoryId, setCategoryId] = useState(initialChain.categoryId);
-  const [subcategoryId, setSubcategoryId] = useState(initialChain.subcategoryId);
-
   const [form, setForm] = useState({
     imageUrl: product?.imageUrl ?? "",
     name: product?.name ?? "",
     code: product?.code ?? "",
     description: product?.description ?? "",
     type: product?.type ?? "switch_board",
+    categoryId: product?.categoryId ? String(product.categoryId) : "",
     price: product?.price ?? "",
     unit: product?.unit ?? "pcs",
     notes: product?.notes ?? "",
@@ -85,46 +47,7 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // --- Cascading dropdown data ---
-
-  // Series = level 1 categories (top of tree)
-  const seriesList = categories;
-
-  // Categories for selected Series
-  const categoryList = useMemo(() => {
-    if (!seriesId) return [];
-    const series = categories.find((s) => s.id === Number(seriesId));
-    return series?.children ?? [];
-  }, [seriesId, categories]);
-
-  // Subcategories for selected Category
-  const subcategoryList = useMemo(() => {
-    if (!categoryId) return [];
-    const cat = categoryList.find((c) => c.id === Number(categoryId));
-    return cat?.children ?? [];
-  }, [categoryId, categoryList]);
-
-  // Determine the actual categoryId to save (deepest selected level)
-  const resolvedCategoryId = subcategoryId || categoryId || seriesId || "";
-
-  // --- Cascade reset handlers ---
-
-  const handleSeriesChange = (value: string) => {
-    setSeriesId(value);
-    setCategoryId("");
-    setSubcategoryId("");
-  };
-
-  const handleCategoryChange = (value: string) => {
-    setCategoryId(value);
-    setSubcategoryId("");
-  };
-
-  const handleSubcategoryChange = (value: string) => {
-    setSubcategoryId(value);
-  };
-
-  // --- Image handlers (unchanged) ---
+  const flatCats = flattenCategories(categories);
 
   const getPublicIdFromUrl = (url: string) => {
     if (!url) return null;
@@ -216,8 +139,6 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
     }
   };
 
-  // --- Submit ---
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -225,7 +146,7 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
       const body = {
         ...form,
         imageUrl: form.imageUrl || null,
-        categoryId: resolvedCategoryId ? Number(resolvedCategoryId) : null,
+        categoryId: form.categoryId ? Number(form.categoryId) : null,
         price: Number(form.price),
         sortOrder: 0,
       };
@@ -255,13 +176,10 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
   const inputClass =
     "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition";
 
-  const disabledSelectClass =
-    "w-full px-3 py-2.5 border border-gray-100 rounded-xl text-sm bg-gray-50 text-gray-400 cursor-not-allowed";
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="sm:col-span-2">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
           {form.imageUrl ? (
             <div className="border border-gray-200 rounded-xl p-3">
@@ -321,7 +239,7 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
             </label>
           )}
         </div>
-        <div className="sm:col-span-2">
+        <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
           <input
             required
@@ -355,82 +273,19 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
             ))}
           </select>
         </div>
-
-        {/* --- Cascading Category Dropdowns --- */}
-        <div className="sm:col-span-2">
-          <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Category Hierarchy
-            </p>
-
-            {/* Series (Level 1) */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Series</label>
-              <select
-                value={seriesId}
-                onChange={(e) => handleSeriesChange(e.target.value)}
-                className={inputClass}
-                id="product-series-select"
-              >
-                <option value="">— Select Series —</option>
-                {seriesList.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Category (Level 2) */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
-              {seriesId ? (
-                <select
-                  value={categoryId}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className={inputClass}
-                  id="product-category-select"
-                >
-                  <option value="">— Select Category —</option>
-                  {categoryList.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <select disabled className={disabledSelectClass}>
-                  <option>Select a Series first</option>
-                </select>
-              )}
-            </div>
-
-            {/* Subcategory (Level 3) */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Subcategory</label>
-              {categoryId ? (
-                subcategoryList.length > 0 ? (
-                  <select
-                    value={subcategoryId}
-                    onChange={(e) => handleSubcategoryChange(e.target.value)}
-                    className={inputClass}
-                    id="product-subcategory-select"
-                  >
-                    <option value="">— Select Subcategory —</option>
-                    {subcategoryList.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <select disabled className={disabledSelectClass}>
-                    <option>No subcategories available</option>
-                  </select>
-                )
-              ) : (
-                <select disabled className={disabledSelectClass}>
-                  <option>Select a Category first</option>
-                </select>
-              )}
-            </div>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <select
+            value={form.categoryId}
+            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+            className={inputClass}
+          >
+            <option value="">— No Category —</option>
+            {flatCats.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹) *</label>
           <input
@@ -454,7 +309,7 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
             placeholder="pcs"
           />
         </div>
-        <div className="sm:col-span-2">
+        <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
             value={form.description}
@@ -464,7 +319,7 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
             placeholder="Full product description..."
           />
         </div>
-        <div className="sm:col-span-2">
+        <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Notes (visible to sales)</label>
           <textarea
             value={form.notes}
@@ -473,7 +328,7 @@ export default function ProductForm({ product, categories, onSuccess }: Props) {
             rows={2}
           />
         </div>
-        <div className="sm:col-span-2 flex items-center gap-2">
+        <div className="col-span-2 flex items-center gap-2">
           <input
             type="checkbox"
             id="isActive"
