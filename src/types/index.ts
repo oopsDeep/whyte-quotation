@@ -1,4 +1,10 @@
 export type ProductType = "switch_board" | "accessory" | "retrofit" | "curtain" | "smart_lock" | "vdp" | "other";
+
+/** A single option in a category's variant dimension. e.g. { value: "wifi", label: "WiFi Smart" } */
+export interface VariantOption {
+  value: string;
+  label: string;
+}
 export type QuotationStatus = "draft" | "sent" | "approved" | "rejected";
 export type DiscountType = "percentage" | "fixed" | "none";
 export type AdminRole = "super_admin" | "admin" | "sales";
@@ -13,6 +19,34 @@ export interface Category {
   isActive: boolean;
   children?: Category[];
   products?: Product[];
+  variantTiers?: VariantOption[] | null;
+  variantFinishes?: VariantOption[] | null;
+}
+
+/**
+ * One axis of a matrix product.
+ * e.g. { key: "series", label: "Series", options: ["wifi", "zigbee"] }
+ */
+export interface MatrixDimension {
+  key: string;
+  label: string;
+  options: string[];
+}
+
+/**
+ * A single pricing variant. config holds N-dim key→value pairs.
+ * e.g. { series: "wifi", finish: "glass" } for a 2D switch board.
+ * Empty config {} for flat (single-price) products.
+ */
+export interface ProductVariant {
+  id: number;
+  productId: number;
+  automationTier: string | null;  // kept for backward compat
+  surfaceFinish: string | null;   // kept for backward compat
+  config: Record<string, string>; // NEW: generic N-dim config
+  price: string;
+  isActive: boolean;
+  sortOrder: number;
 }
 
 export interface Product {
@@ -23,14 +57,19 @@ export interface Product {
   type: ProductType;
   categoryId: number | null;
   category?: Category;
-  price: string;
+  price: string;           // min variant price (or flat price for display)
   unit: string;
   imageUrl: string | null;
+  moduleSize?: string | null;
   notes: string | null;
   isActive: boolean;
   sortOrder: number;
   createdAt?: string;
   updatedAt?: string;
+  // Matrix pricing (NEW)
+  isMatrix: boolean;
+  matrixDimensions: MatrixDimension[] | null;
+  variants?: ProductVariant[];
 }
 
 export interface QuotationItem {
@@ -38,6 +77,10 @@ export interface QuotationItem {
   quotationRoomId: number;
   productId: number;
   product?: Product;
+  productVariantId: number | null;
+  productVariant?: ProductVariant | null;
+  variantLabel: string | null;
+  variantConfig: Record<string, string> | null; // NEW: config snapshot
   sbNumber: string | null;
   quantity: number;
   unitPrice: string;
@@ -73,6 +116,8 @@ export interface Quotation {
   discountValue: string | null;
   terms: string | null;
   validUntil: string | null;
+  defaultTier: string | null;
+  defaultFinish: string | null;
   createdAt: string;
   updatedAt?: string;
   rooms: QuotationRoom[];

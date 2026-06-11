@@ -19,16 +19,18 @@ model Company {
 }
 
 model Category {
-  id        Int        @id @default(autoincrement())
-  name      String
-  level     Int
-  parentId  Int?
-  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children  Category[] @relation("CategoryTree")
-  products  Product[]
-  sortOrder Int        @default(0)
-  isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
+  id              Int        @id @default(autoincrement())
+  name            String
+  level           Int
+  parentId        Int?
+  parent          Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children        Category[] @relation("CategoryTree")
+  products        Product[]
+  sortOrder       Int        @default(0)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  variantTiers    Json?      @db.JsonB
+  variantFinishes Json?      @db.JsonB
 }
 
 enum ProductType {
@@ -42,21 +44,40 @@ enum ProductType {
 }
 
 model Product {
+  id               Int              @id @default(autoincrement())
+  name             String
+  code             String?
+  description      String?
+  type             ProductType
+  categoryId       Int?
+  category         Category?        @relation(fields: [categoryId], references: [id])
+  price            Decimal          @db.Decimal(10, 2)
+  unit             String           @default("pcs")
+  imageUrl         String?
+  moduleSize       String?
+  notes            String?
+  isActive         Boolean          @default(true)
+  sortOrder        Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  // Matrix pricing fields (NEW)
+  isMatrix         Boolean          @default(false)
+  matrixDimensions Json?            @db.JsonB
+  variants         ProductVariant[]
+  quotationItems   QuotationItem[]
+}
+
+model ProductVariant {
   id             Int             @id @default(autoincrement())
-  name           String
-  code           String?
-  description    String?
-  type           ProductType
-  categoryId     Int?
-  category       Category?       @relation(fields: [categoryId], references: [id])
+  productId      Int
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  automationTier String?
+  surfaceFinish  String?
+  // Generic config for N-dimensional matrix (NEW)
+  config         Json            @default("{}") @db.JsonB
   price          Decimal         @db.Decimal(10, 2)
-  unit           String          @default("pcs")
-  imageUrl       String?
-  notes          String?
   isActive       Boolean         @default(true)
   sortOrder      Int             @default(0)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
   quotationItems QuotationItem[]
 }
 
@@ -104,25 +125,27 @@ enum DiscountType {
 }
 
 model Quotation {
-  id              String          @id @default(cuid())
-  quotationNumber String          @unique
-  clientName      String
-  clientGstNumber String?
-  clientPhone     String?
-  clientEmail     String?
-  clientAddress   String?
-  houseTypeId     Int?
-  houseType       HouseType?      @relation(fields: [houseTypeId], references: [id])
-  status          QuotationStatus @default(draft)
-  notes           String?
-  discountType    DiscountType?
-  discountValue   Decimal?        @db.Decimal(10, 2)
-  terms           String?
-  validUntil      DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  createdBy       String?
-  rooms           QuotationRoom[]
+  id                  String          @id @default(cuid())
+  quotationNumber     String          @unique
+  clientName          String
+  clientGstNumber     String?
+  clientPhone         String?
+  clientEmail         String?
+  clientAddress       String?
+  houseTypeId         Int?
+  houseType           HouseType?      @relation(fields: [houseTypeId], references: [id])
+  status              QuotationStatus @default(draft)
+  notes               String?
+  discountType        DiscountType?
+  discountValue       Decimal?        @db.Decimal(10, 2)
+  terms               String?
+  validUntil          DateTime?
+  defaultTier         String?
+  defaultFinish       String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  createdBy           String?
+  rooms               QuotationRoom[]
 }
 
 model QuotationRoom {
@@ -139,16 +162,21 @@ model QuotationRoom {
 }
 
 model QuotationItem {
-  id              Int           @id @default(autoincrement())
-  quotationRoomId Int
-  room            QuotationRoom @relation(fields: [quotationRoomId], references: [id], onDelete: Cascade)
-  productId       Int
-  product         Product       @relation(fields: [productId], references: [id])
-  sbNumber        String?
-  quantity        Int           @default(1)
-  unitPrice       Decimal       @db.Decimal(10, 2)
-  notes           String?
-  sortOrder       Int           @default(0)
+  id               Int             @id @default(autoincrement())
+  quotationRoomId  Int
+  room             QuotationRoom   @relation(fields: [quotationRoomId], references: [id], onDelete: Cascade)
+  productId        Int
+  product          Product         @relation(fields: [productId], references: [id])
+  productVariantId Int?
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  variantLabel     String?
+  // Config snapshot at time of add (NEW)
+  variantConfig    Json?           @db.JsonB
+  sbNumber         String?
+  quantity         Int             @default(1)
+  unitPrice        Decimal         @db.Decimal(10, 2)
+  notes            String?
+  sortOrder        Int             @default(0)
 }
 
 enum AdminRole {

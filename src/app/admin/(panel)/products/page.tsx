@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Product, Category } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Search, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
@@ -10,6 +11,7 @@ import ProductForm from "@/components/admin/ProductForm";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 
 export default function ProductsPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,26 @@ export default function ProductsPage() {
         fetch("/api/categories"),
       ]);
       const [p, c] = await Promise.all([pRes.json(), cRes.json()]);
+
+      if (pRes.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      if (!pRes.ok) {
+        throw new Error(p?.error ?? "Failed to load products");
+      }
+      if (!cRes.ok) {
+        throw new Error(c?.error ?? "Failed to load categories");
+      }
+
+      if (!Array.isArray(p)) {
+        throw new Error("Invalid products response");
+      }
+      if (!Array.isArray(c)) {
+        throw new Error("Invalid categories response");
+      }
+
       setProducts(p);
       setCategories(c);
     } catch {

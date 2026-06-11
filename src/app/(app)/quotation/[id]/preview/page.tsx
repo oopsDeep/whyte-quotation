@@ -261,7 +261,12 @@ export default function PreviewPage() {
                               return (
                                 <tr key={item.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
                                   <td className="px-3 py-2 text-slate-500 text-xs font-mono">{item.sbNumber ?? "-"}</td>
-                                  <td className="px-3 py-2 font-medium text-slate-900">{item.product?.name ?? "-"}</td>
+                                  <td className="px-3 py-2 font-medium text-slate-900">
+                                    {item.product?.name ?? "-"}
+                                    {item.variantLabel && (
+                                      <span className="block text-xs text-slate-500 font-normal mt-0.5">{item.variantLabel}</span>
+                                    )}
+                                  </td>
                                   <td className="px-3 py-2 text-slate-500 font-mono text-xs">{item.product?.code ?? "-"}</td>
                                   <td className="px-3 py-2 text-slate-500 text-xs hidden md:table-cell">{item.product?.description ?? "-"}</td>
                                   <td className="px-3 py-2 text-center text-slate-700">{item.quantity}</td>

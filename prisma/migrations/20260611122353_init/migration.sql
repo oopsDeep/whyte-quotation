@@ -14,6 +14,7 @@ CREATE TYPE "AdminRole" AS ENUM ('super_admin', 'admin', 'sales');
 CREATE TABLE "Company" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
+    "gstNumber" TEXT,
     "phone" TEXT NOT NULL,
     "email" TEXT,
     "address" TEXT NOT NULL,
@@ -33,6 +34,8 @@ CREATE TABLE "Category" (
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "variantTiers" JSONB,
+    "variantFinishes" JSONB,
 
     CONSTRAINT "Category_pkey" PRIMARY KEY ("id")
 );
@@ -48,13 +51,30 @@ CREATE TABLE "Product" (
     "price" DECIMAL(10,2) NOT NULL,
     "unit" TEXT NOT NULL DEFAULT 'pcs',
     "imageUrl" TEXT,
+    "moduleSize" TEXT,
     "notes" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "isMatrix" BOOLEAN NOT NULL DEFAULT false,
+    "matrixDimensions" JSONB,
 
     CONSTRAINT "Product_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProductVariant" (
+    "id" SERIAL NOT NULL,
+    "productId" INTEGER NOT NULL,
+    "automationTier" TEXT,
+    "surfaceFinish" TEXT,
+    "config" JSONB NOT NULL DEFAULT '{}',
+    "price" DECIMAL(10,2) NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ProductVariant_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -95,6 +115,7 @@ CREATE TABLE "Quotation" (
     "id" TEXT NOT NULL,
     "quotationNumber" TEXT NOT NULL,
     "clientName" TEXT NOT NULL,
+    "clientGstNumber" TEXT,
     "clientPhone" TEXT,
     "clientEmail" TEXT,
     "clientAddress" TEXT,
@@ -105,6 +126,8 @@ CREATE TABLE "Quotation" (
     "discountValue" DECIMAL(10,2),
     "terms" TEXT,
     "validUntil" TIMESTAMP(3),
+    "defaultTier" TEXT,
+    "defaultFinish" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdBy" TEXT,
@@ -119,6 +142,7 @@ CREATE TABLE "QuotationRoom" (
     "roomTypeId" INTEGER,
     "customName" TEXT,
     "subArea" TEXT,
+    "notes" TEXT,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "QuotationRoom_pkey" PRIMARY KEY ("id")
@@ -129,6 +153,9 @@ CREATE TABLE "QuotationItem" (
     "id" SERIAL NOT NULL,
     "quotationRoomId" INTEGER NOT NULL,
     "productId" INTEGER NOT NULL,
+    "productVariantId" INTEGER,
+    "variantLabel" TEXT,
+    "variantConfig" JSONB,
     "sbNumber" TEXT,
     "quantity" INTEGER NOT NULL DEFAULT 1,
     "unitPrice" DECIMAL(10,2) NOT NULL,
@@ -164,6 +191,9 @@ ALTER TABLE "Category" ADD CONSTRAINT "Category_parentId_fkey" FOREIGN KEY ("par
 ALTER TABLE "Product" ADD CONSTRAINT "Product_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "HouseTypeRoomTemplate" ADD CONSTRAINT "HouseTypeRoomTemplate_houseTypeId_fkey" FOREIGN KEY ("houseTypeId") REFERENCES "HouseType"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -183,3 +213,6 @@ ALTER TABLE "QuotationItem" ADD CONSTRAINT "QuotationItem_quotationRoomId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "QuotationItem" ADD CONSTRAINT "QuotationItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuotationItem" ADD CONSTRAINT "QuotationItem_productVariantId_fkey" FOREIGN KEY ("productVariantId") REFERENCES "ProductVariant"("id") ON DELETE SET NULL ON UPDATE CASCADE;

@@ -9,6 +9,7 @@ import Image from "next/image";
 export default function AdminLayoutWrapper({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const checkScreen = () => {
@@ -17,15 +18,21 @@ export default function AdminLayoutWrapper({ children }: { children: React.React
       // Auto-close sidebar when resizing to mobile
       if (mobile) setIsOpen(false);
     };
-    
-    // Initial setup
-    const mobile = window.innerWidth < 1024;
-    setIsMobile(mobile);
-    setIsOpen(!mobile);
+
+    setMounted(true);
+    checkScreen();
     
     window.addEventListener("resize", checkScreen);
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
+
+  if (!mounted) {
+    return (
+      <div className="flex h-dvh w-full items-center justify-center bg-gray-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-whyte-blue border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-gray-50 w-full">

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { RoomType } from "@/types";
 import { Plus, Pencil, ToggleLeft, ToggleRight } from "lucide-react";
+import { getRoomIcon } from "@/lib/utils";
 import toast from "react-hot-toast";
 import Modal from "@/components/shared/Modal";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
@@ -42,15 +43,6 @@ function RoomTypeForm({ roomType, onSuccess }: { roomType?: RoomType | null; onS
           onChange={(e) => setName(e.target.value)}
           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
           placeholder="e.g. Living Room"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Icon / Emoji</label>
-        <input
-          value={icon}
-          onChange={(e) => setIcon(e.target.value)}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-          placeholder="🛋️"
         />
       </div>
       <button type="submit" disabled={saving} className="w-full py-2.5 bg-whyte-blue text-white font-semibold rounded-xl hover:bg-whyte-light transition disabled:opacity-60">
@@ -94,22 +86,25 @@ export default function RoomTypesPage() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-50">
-          {roomTypes.map((rt: RoomType) => (
-            <div key={rt.id} className={`flex items-center justify-between px-3 sm:px-4 py-3 sm:border-r border-gray-50 ${!rt.isActive ? "opacity-50" : ""}`}>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{rt.icon}</span>
-                <span className="text-sm font-medium text-gray-800">{rt.name}</span>
+          {roomTypes.map((rt: RoomType) => {
+            const RoomIcon = getRoomIcon(rt.name);
+            return (
+              <div key={rt.id} className={`flex items-center justify-between px-3 sm:px-4 py-3 sm:border-r border-gray-50 ${!rt.isActive ? "opacity-50" : ""}`}>
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <RoomIcon size={16} className="text-gray-500 shrink-0" />
+                  <span className="text-sm font-medium text-gray-800 truncate">{rt.name}</span>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => { setEditTarget(rt); setShowForm(true); }} className="p-1.5 text-gray-400 hover:text-whyte-blue hover:bg-blue-50 rounded-lg transition">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={() => handleToggle(rt)} className="text-gray-400 hover:text-gray-650 transition">
+                    {rt.isActive ? <ToggleRight size={22} className="text-green-500" /> : <ToggleLeft size={22} />}
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <button onClick={() => { setEditTarget(rt); setShowForm(true); }} className="p-1.5 text-gray-400 hover:text-whyte-blue hover:bg-blue-50 rounded-lg transition">
-                  <Pencil size={14} />
-                </button>
-                <button onClick={() => handleToggle(rt)} className="text-gray-400 hover:text-gray-600 transition">
-                  {rt.isActive ? <ToggleRight size={22} className="text-green-500" /> : <ToggleLeft size={22} />}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

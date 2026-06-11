@@ -36,7 +36,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const body = await req.json();
 
-    // Whitelist updatable fields to prevent accidental overwrites.
+    // Whitelist updatable scalar fields
     const allowedFields = [
       "name",
       "code",
@@ -49,6 +49,8 @@ export async function PATCH(req: Request, context: RouteContext) {
       "notes",
       "isActive",
       "sortOrder",
+      "isMatrix",
+      "matrixDimensions",
     ] as const;
 
     const data: Record<string, unknown> = {};
@@ -57,8 +59,6 @@ export async function PATCH(req: Request, context: RouteContext) {
         data[field] = body[field];
       }
     }
-
-    // price field removed — pricing is now in ProductVariant table
 
     if (data.sortOrder !== undefined) {
       const nextSortOrder = Number(data.sortOrder);
@@ -99,22 +99,30 @@ export async function PATCH(req: Request, context: RouteContext) {
     const variantsInput = body.variants;
 
     const product = await prisma.$transaction(async (tx) => {
-      const updated = await tx.product.update({
-        where: { id: productId },
-        data,
-      });
-
-      // If variants array is provided, replace all variants
-      if (Array.isArray(variantsInput)) {
-        // Validate variant prices
+      // If variants are being replaced, compute min price first
+      if (Array.isArray(variantsInput) && variantsInput.length > 0) {
         for (const v of variantsInput) {
           const price = Number(v.price);
           if (!Number.isFinite(price) || price < 0) {
             throw new Error("All variant prices must be valid non-negative numbers");
           }
         }
+        const minPrice = Math.min(...variantsInput.map((v: { price: unknown }) => Number(v.price)));
+        data.price = minPrice;
+      }
 
-        // Delete existing variants and recreate
+      const updated = await tx.product.update({
+        where: { id: productId },
+        data,
+      });
+
+      // Replace all variants when variants array is provided
+      if (Array.isArray(variantsInput)) {
+        if (variantsInput.length === 0) {
+          throw new Error("At least one pricing variant is required");
+        }
+
+        // Delete and recreate. FK on QuotationItem uses SetNull so existing items are safe.
         await tx.productVariant.deleteMany({ where: { productId } });
         for (let i = 0; i < variantsInput.length; i++) {
           const v = variantsInput[i];
@@ -123,6 +131,7 @@ export async function PATCH(req: Request, context: RouteContext) {
               productId,
               automationTier: v.automationTier || null,
               surfaceFinish: v.surfaceFinish || null,
+              config: v.config ?? {},
               price: Number(v.price),
               sortOrder: i,
               isActive: v.isActive ?? true,

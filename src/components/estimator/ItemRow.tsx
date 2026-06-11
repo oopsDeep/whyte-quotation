@@ -127,6 +127,9 @@ export default function ItemRow({ item, currentRoomId, allRooms, onUpdate, onDel
         {/* Product Info */}
         <div className="flex-1 min-w-0">
           <p className="font-medium text-gray-900 text-sm md:text-base truncate">{item.product?.name ?? "Product"}</p>
+          {item.variantLabel && (
+            <p className="text-xs text-blue-600 font-medium truncate mt-0.5">{item.variantLabel}</p>
+          )}
           <p className="text-xs md:text-sm text-gray-400">
             {formatCurrency(item.unitPrice)} / {item.product?.unit ?? "pcs"}
             {item.product?.code && <span className="ml-1 font-mono">• {item.product.code}</span>}

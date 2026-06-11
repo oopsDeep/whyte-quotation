@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -9,13 +10,12 @@ export const dynamic = "force-dynamic";
  * GET /api/products
  * Query param: ?all=true  → returns all products (admin)
  * Default       → returns only active products (estimator)
- * Now includes variants[] for each product.
+ * Includes variants[] for each product.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const showAll = searchParams.get("all") === "true";
 
-  // Admin-only: showing all products requires auth
   if (showAll) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,8 +47,14 @@ export async function GET(req: Request) {
 
 /**
  * POST /api/products
- * Body: { name, code, type, categoryId, unit, imageUrl, moduleSize, notes, variants[] }
- * variants: [{ automationTier, surfaceFinish, price }]
+ * Body: { name, code, type, categoryId, unit, imageUrl, moduleSize, notes,
+ *         isMatrix, matrixDimensions, variants[] }
+ * variants: [{ config, price, automationTier?, surfaceFinish? }]
+ *
+ * For flat products (isMatrix=false): send one variant with config={}
+ * For matrix products (isMatrix=true): send N variants each with config={key:value,...}
+ *
+ * Product.price is automatically set to min(variants[].price).
  */
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -56,7 +62,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { variants: variantsInput, ...productData } = body;
+    const { variants: variantsInput, isMatrix, matrixDimensions, ...productData } = body;
 
     // Validate variants — must have at least one
     const variants = Array.isArray(variantsInput) ? variantsInput : [];
@@ -71,6 +77,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "All variant prices must be valid non-negative numbers" }, { status: 400 });
       }
     }
+
+    // Compute min price for the product (used for "From ₹X" display)
+    const minPrice = Math.min(...variants.map((v: { price: unknown }) => Number(v.price)));
 
     // Validate categoryId
     let categoryId: number | null = null;
@@ -103,12 +112,15 @@ export async function POST(req: Request) {
           description: productData.description || null,
           type: productData.type,
           categoryId,
+          price: minPrice,
           unit: productData.unit || "pcs",
           imageUrl: productData.imageUrl || null,
           moduleSize: productData.moduleSize || null,
           notes: productData.notes || null,
           sortOrder: productData.sortOrder ?? 0,
           isActive: productData.isActive ?? true,
+          isMatrix: Boolean(isMatrix),
+          matrixDimensions: isMatrix && Array.isArray(matrixDimensions) ? (matrixDimensions as any) : Prisma.DbNull,
         },
       });
 
@@ -120,6 +132,7 @@ export async function POST(req: Request) {
             productId: created.id,
             automationTier: v.automationTier || null,
             surfaceFinish: v.surfaceFinish || null,
+            config: v.config ?? {},
             price: Number(v.price),
             sortOrder: i,
             isActive: true,

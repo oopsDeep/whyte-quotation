@@ -1,24 +1,39 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 /**
- * Build a human-readable label from variant dimensions.
- * Examples: "WiFi + Glass", "Zigbee", "Metal", null (for single-price)
+ * Build a human-readable label from a variant config object.
+ * Works for any number of dimensions.
+ * Examples: "WiFi + Glass", "Zigbee", "Metal", null (for empty/flat config)
  */
-function buildVariantLabel(tier: string | null, finish: string | null): string | null {
-  const parts: string[] = [];
-  if (tier) parts.push(tier.charAt(0).toUpperCase() + tier.slice(1));
-  if (finish) parts.push(finish.charAt(0).toUpperCase() + finish.slice(1));
-  return parts.length > 0 ? parts.join(" + ") : null;
+function buildVariantLabel(config: Record<string, string>): string | null {
+  const parts = Object.values(config).filter(Boolean);
+  if (parts.length === 0) return null;
+  return parts.map((v) => v.charAt(0).toUpperCase() + v.slice(1)).join(" + ");
+}
+
+/**
+ * Check if two config objects match.
+ * Returns true if all keys in `defaults` are present and equal in `variantConfig`.
+ * Keys absent in defaults are ignored (partial match allowed).
+ */
+function configMatchesDefaults(
+  variantConfig: Record<string, string>,
+  defaults: Record<string, string>
+): boolean {
+  return Object.entries(defaults).every(
+    ([key, val]) => val && variantConfig[key] === val
+  );
 }
 
 export async function POST(req: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     const body = await req.json();
-    const { quotationRoomId, productId, productVariantId, quantity = 1, sbNumber, notes } = body;
+    const { quotationRoomId, productId, productVariantId, variantConfig: clientConfig, quantity = 1, sbNumber, notes } = body;
 
     // Validate required fields
     if (!quotationRoomId || !productId) {
@@ -39,7 +54,7 @@ export async function POST(req: Request, context: RouteContext) {
       );
     }
 
-    // Get the product with its variants
+    // Get the product with its active variants
     const product = await prisma.product.findUnique({
       where: { id: Number(productId) },
       include: { variants: { where: { isActive: true }, orderBy: { sortOrder: "asc" } } },
@@ -60,11 +75,11 @@ export async function POST(req: Request, context: RouteContext) {
       );
     }
 
-    // Resolve the variant to use for price snapshot
-    let selectedVariant;
+    // Resolve which variant to use
+    let selectedVariant: (typeof product.variants)[0] | undefined;
 
     if (productVariantId) {
-      // Client explicitly picked a variant
+      // Client explicitly picked a variant ID
       selectedVariant = product.variants.find((v) => v.id === Number(productVariantId));
       if (!selectedVariant) {
         return NextResponse.json(
@@ -72,8 +87,21 @@ export async function POST(req: Request, context: RouteContext) {
           { status: 400 }
         );
       }
+    } else if (clientConfig && typeof clientConfig === "object" && Object.keys(clientConfig).length > 0) {
+      // Client sent a config object — find the exact matching variant
+      selectedVariant = product.variants.find((v) => {
+        const vc = (v.config as Record<string, string>) ?? {};
+        return configMatchesDefaults(vc, clientConfig as Record<string, string>)
+          && Object.keys(vc).length === Object.keys(clientConfig as object).length;
+      });
+      if (!selectedVariant) {
+        return NextResponse.json(
+          { error: "No variant found matching the provided config" },
+          { status: 400 }
+        );
+      }
     } else if (product.variants.length === 1) {
-      // Single variant — auto-select
+      // Single variant (flat product) — auto-select
       selectedVariant = product.variants[0];
     } else {
       // Multiple variants, no explicit pick — try matching quotation defaults
@@ -83,24 +111,38 @@ export async function POST(req: Request, context: RouteContext) {
       });
 
       if (quotation?.defaultTier || quotation?.defaultFinish) {
-        selectedVariant = product.variants.find(
-          (v) =>
-            (quotation.defaultTier ? v.automationTier === quotation.defaultTier : v.automationTier === null) &&
-            (quotation.defaultFinish ? v.surfaceFinish === quotation.defaultFinish : v.surfaceFinish === null)
-        );
+        // Build a defaults config from legacy tier/finish columns
+        const defaults: Record<string, string> = {};
+        if (quotation.defaultTier) defaults.series = quotation.defaultTier;
+        if (quotation.defaultFinish) defaults.finish = quotation.defaultFinish;
+
+        selectedVariant = product.variants.find((v) => {
+          const vc = (v.config as Record<string, string>) ?? {};
+          // Try matching via new config
+          if (Object.keys(vc).length > 0) {
+            return configMatchesDefaults(vc, defaults);
+          }
+          // Fallback: match via legacy columns
+          return (
+            (!quotation.defaultTier || v.automationTier === quotation.defaultTier) &&
+            (!quotation.defaultFinish || v.surfaceFinish === quotation.defaultFinish)
+          );
+        });
       }
 
-      // If still no match, return error — frontend should show variant picker
+      // If still no match, return 422 so frontend shows variant picker
       if (!selectedVariant) {
         return NextResponse.json(
           {
             error: "Multiple variants available — please specify productVariantId",
+            requiresPicker: true,
             variants: product.variants.map((v) => ({
               id: v.id,
+              config: v.config,
               automationTier: v.automationTier,
               surfaceFinish: v.surfaceFinish,
               price: v.price,
-              label: buildVariantLabel(v.automationTier, v.surfaceFinish),
+              label: buildVariantLabel((v.config as Record<string, string>) ?? {}),
             })),
           },
           { status: 422 }
@@ -108,7 +150,15 @@ export async function POST(req: Request, context: RouteContext) {
       }
     }
 
-    const variantLabel = buildVariantLabel(selectedVariant.automationTier, selectedVariant.surfaceFinish);
+    const variantConfig = (selectedVariant.config as Record<string, string>) ?? {};
+    const variantLabel = buildVariantLabel(variantConfig)
+      // Fallback to legacy label for old variants that haven't been migrated
+      ?? (selectedVariant.automationTier || selectedVariant.surfaceFinish
+        ? [selectedVariant.automationTier, selectedVariant.surfaceFinish]
+            .filter(Boolean)
+            .map((s) => s!.charAt(0).toUpperCase() + s!.slice(1))
+            .join(" + ") || null
+        : null);
 
     const item = await prisma.quotationItem.create({
       data: {
@@ -116,8 +166,9 @@ export async function POST(req: Request, context: RouteContext) {
         productId: Number(productId),
         productVariantId: selectedVariant.id,
         quantity: Math.max(1, Number(quantity)),
-        unitPrice: selectedVariant.price, // Price snapshot from the variant
+        unitPrice: selectedVariant.price,
         variantLabel,
+        variantConfig: Object.keys(variantConfig).length > 0 ? (variantConfig as any) : Prisma.DbNull,
         sbNumber: sbNumber?.trim() || null,
         notes: notes?.trim() || null,
         sortOrder: 0,

@@ -28,14 +28,14 @@ export default function CategoryFilter({ categories, l1Id, l2Id, l3Id, onL1Chang
   }, [l2Cats, l2Id]);
 
   const selectClass =
-    "w-full px-3 py-2 md:px-3.5 md:py-2.5 border border-gray-200 rounded-xl text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white";
+    "w-full h-10 px-2.5 border border-gray-200 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white transition-all";
 
   return (
-    <div className="flex gap-2 md:gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:flex gap-2 md:gap-3 w-full">
       <select
         value={l1Id ?? ""}
         onChange={(e) => onL1Change(e.target.value ? Number(e.target.value) : null)}
-        className={selectClass}
+        className={`${selectClass} ${l2Cats.length > 0 ? "col-span-1" : "col-span-2"} sm:col-span-1`}
       >
         <option value="">All Series</option>
         {l1Cats.map((c) => (
@@ -47,7 +47,7 @@ export default function CategoryFilter({ categories, l1Id, l2Id, l3Id, onL1Chang
         <select
           value={l2Id ?? ""}
           onChange={(e) => onL2Change(e.target.value ? Number(e.target.value) : null)}
-          className={selectClass}
+          className={`${selectClass} ${l3Cats.length > 0 ? "col-span-1" : "col-span-1"} sm:col-span-1`}
         >
           <option value="">All Tech</option>
           {l2Cats.map((c) => (
@@ -60,7 +60,7 @@ export default function CategoryFilter({ categories, l1Id, l2Id, l3Id, onL1Chang
         <select
           value={l3Id ?? ""}
           onChange={(e) => onL3Change(e.target.value ? Number(e.target.value) : null)}
-          className={selectClass}
+          className={`${selectClass} col-span-2 sm:col-span-1`}
         >
           <option value="">All Material</option>
           {l3Cats.map((c) => (

@@ -1,4 +1,4 @@
-import { PrismaClient, ProductType } from "@prisma/client";
+import { PrismaClient, ProductType, Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import "dotenv/config";
@@ -24,12 +24,27 @@ async function upsertProductWithVariants(
     price: number;
   }>
 ) {
+  // Determine isMatrix and matrixDimensions from variants
+  const hasMatrix = variants.some((v) => v.automationTier !== null || v.surfaceFinish !== null);
+  const distinctTiers = [...new Set(variants.map((v) => v.automationTier).filter((t): t is string => t !== null))];
+  const distinctFinishes = [...new Set(variants.map((v) => v.surfaceFinish).filter((f): f is string => f !== null))];
+
+  const matrixDimensions: Array<{ key: string; label: string; options: string[] }> = [];
+  if (distinctTiers.length > 0) {
+    matrixDimensions.push({ key: "series", label: "Series", options: distinctTiers });
+  }
+  if (distinctFinishes.length > 0) {
+    matrixDimensions.push({ key: "finish", label: "Finish", options: distinctFinishes });
+  }
+
+  // Min price for product.price field (used for "From ₹X" display)
+  const minPrice = Math.min(...variants.map((v) => v.price));
+
   const existing = await prisma.product.findFirst({ where: { code: product.code } });
   let productId: number;
 
   if (existing) {
     productId = existing.id;
-    // Update product fields (not variants — handled below)
     await prisma.product.update({
       where: { id: productId },
       data: {
@@ -39,6 +54,9 @@ async function upsertProductWithVariants(
         categoryId: product.categoryId ?? null,
         description: product.description ?? null,
         moduleSize: product.moduleSize ?? null,
+        price: minPrice,
+        isMatrix: hasMatrix,
+        matrixDimensions: hasMatrix && matrixDimensions.length > 0 ? (matrixDimensions as any) : Prisma.DbNull,
       },
     });
   } else {
@@ -53,6 +71,9 @@ async function upsertProductWithVariants(
         moduleSize: product.moduleSize ?? null,
         sortOrder: product.sortOrder ?? 0,
         isActive: true,
+        price: minPrice,
+        isMatrix: hasMatrix,
+        matrixDimensions: hasMatrix && matrixDimensions.length > 0 ? (matrixDimensions as any) : Prisma.DbNull,
       },
     });
     productId = created.id;
@@ -61,6 +82,11 @@ async function upsertProductWithVariants(
   // Upsert variants — use findFirst because composite unique has nullable fields
   for (let i = 0; i < variants.length; i++) {
     const v = variants[i];
+    // Build the generic config from tier/finish
+    const config: Record<string, string> = {};
+    if (v.automationTier) config.series = v.automationTier;
+    if (v.surfaceFinish) config.finish = v.surfaceFinish;
+
     const existing = await prisma.productVariant.findFirst({
       where: {
         productId,
@@ -72,7 +98,7 @@ async function upsertProductWithVariants(
     if (existing) {
       await prisma.productVariant.update({
         where: { id: existing.id },
-        data: { price: v.price, sortOrder: i },
+        data: { price: v.price, sortOrder: i, config },
       });
     } else {
       await prisma.productVariant.create({
@@ -80,6 +106,7 @@ async function upsertProductWithVariants(
           productId,
           automationTier: v.automationTier,
           surfaceFinish: v.surfaceFinish,
+          config,
           price: v.price,
           sortOrder: i,
           isActive: true,
@@ -135,43 +162,46 @@ async function main() {
 
   // ── Room Types (28) ──
   const roomTypes = [
-    { name: "Living Room", icon: "🛋️" },
-    { name: "Master Bedroom", icon: "🛏️" },
-    { name: "Bedroom 2", icon: "🛏️" },
-    { name: "Bedroom 3", icon: "🛏️" },
-    { name: "Bedroom 4", icon: "🛏️" },
-    { name: "Kids Room", icon: "🧒" },
-    { name: "Guest Room", icon: "🛏️" },
-    { name: "Kitchen", icon: "🍳" },
-    { name: "Dining Room", icon: "🍽️" },
-    { name: "Study Room", icon: "📚" },
-    { name: "Home Office", icon: "💻" },
-    { name: "Puja Room", icon: "🪔" },
-    { name: "Home Theatre", icon: "🎬" },
-    { name: "Gym", icon: "🏋️" },
-    { name: "Balcony 1", icon: "🌿" },
-    { name: "Balcony 2", icon: "🌿" },
-    { name: "Terrace", icon: "☀️" },
-    { name: "Garden", icon: "🌳" },
-    { name: "Entrance / Foyer", icon: "🚪" },
-    { name: "Corridor", icon: "🚶" },
-    { name: "Staircase", icon: "🪜" },
-    { name: "Powder Room", icon: "🪞" },
-    { name: "Laundry", icon: "🧺" },
-    { name: "Store Room", icon: "📦" },
-    { name: "Garage", icon: "🚗" },
-    { name: "Servant Room", icon: "🏠" },
-    { name: "Driver Room", icon: "🏠" },
-    { name: "Common Area", icon: "🏢" },
+    { name: "Living Room" },
+    { name: "Master Bedroom" },
+    { name: "Bedroom 2" },
+    { name: "Bedroom 3" },
+    { name: "Bedroom 4" },
+    { name: "Kids Room" },
+    { name: "Guest Room" },
+    { name: "Kitchen" },
+    { name: "Dining Room" },
+    { name: "Study Room" },
+    { name: "Home Office" },
+    { name: "Puja Room" },
+    { name: "Home Theatre" },
+    { name: "Gym" },
+    { name: "Balcony 1" },
+    { name: "Balcony 2" },
+    { name: "Terrace" },
+    { name: "Garden" },
+    { name: "Entrance / Foyer" },
+    { name: "Corridor" },
+    { name: "Staircase" },
+    { name: "Powder Room" },
+    { name: "Laundry" },
+    { name: "Store Room" },
+    { name: "Garage" },
+    { name: "Servant Room" },
+    { name: "Driver Room" },
+    { name: "Common Area" },
   ];
+
+  // Set all existing room types icons to null to clear emojis from DB
+  await prisma.roomType.updateMany({ data: { icon: null } });
 
   for (let i = 0; i < roomTypes.length; i++) {
     await prisma.roomType.upsert({
       where: { id: i + 1 },
-      update: {},
+      update: { icon: null },
       create: {
         name: roomTypes[i].name,
-        icon: roomTypes[i].icon,
+        icon: null,
         sortOrder: i * 10,
         isActive: true,
       },
