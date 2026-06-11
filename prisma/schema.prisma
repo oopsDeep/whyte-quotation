@@ -51,7 +51,7 @@ model Product {
   type             ProductType
   categoryId       Int?
   category         Category?        @relation(fields: [categoryId], references: [id])
-  price            Decimal          @db.Decimal(10, 2)
+  price            Decimal          @default(0) @db.Decimal(10, 2)
   unit             String           @default("pcs")
   imageUrl         String?
   moduleSize       String?
